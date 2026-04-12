@@ -1,0 +1,24 @@
+# General
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build/Temp
+dist/
+build/
+.expo/
+__pycache__/
+*.pyc
+
+# Local Data
+backend/uploads/
+backend/swach.db
