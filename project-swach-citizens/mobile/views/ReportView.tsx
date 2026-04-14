@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, Alert, Animated } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { X, Check, MapPin } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { X, Check, MapPin, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
 import { COLORS, API_URL } from '../constants/theme';
 import axios from 'axios';
 
@@ -56,6 +57,42 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
     );
   }
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need access to your gallery to upload photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setPhoto(result.assets[0]);
+      if (!location) {
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          setLocation(loc);
+        } catch (e) {
+          console.log("GPS capture failed during gallery pick", e);
+        }
+      }
+    }
+  };
+
+  const retryLocation = async () => {
+    try {
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setLocation(loc);
+      Alert.alert('GPS Fixed', 'Location locked successfully.');
+    } catch (e) {
+      Alert.alert('GPS Error', 'Still unable to lock location. Try moving outdoors.');
+    }
+  };
+
   const takePicture = async () => {
     if (cameraRef.current) {
       const data = await cameraRef.current.takePictureAsync({ quality: 0.7 });
@@ -72,7 +109,11 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
 
   const submitReport = async () => {
     if (!photo || !location) {
-        Alert.alert('GPS Required', 'Waiting for location lock...');
+        Alert.alert(
+            'GPS Required', 
+            'Waiting for location lock. Please try again in 5 seconds or tap Retry.',
+            [{ text: 'Retry', onPress: retryLocation }, { text: 'OK' }]
+        );
         return;
     }
 
@@ -111,12 +152,19 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
   return (
     <View style={styles.container}>
       {!photo ? (
-        <CameraView style={styles.camera} ref={cameraRef}>
+        <View style={styles.cameraContainer}>
+          <CameraView style={styles.camera} ref={cameraRef} />
           <View style={styles.overlay}>
              <View style={styles.topBar}>
-                <TouchableOpacity style={styles.glassBtn} onPress={onCancel}>
-                    <X color="#fff" size={24} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity style={styles.backBtn} onPress={onCancel}>
+                        <ChevronLeft color="#fff" size={24} />
+                        <Text style={styles.backText}>Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.galleryBtn} onPress={pickImage}>
+                        <ImageIcon color="#fff" size={24} />
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.badge}>
                     <View style={styles.dot} />
                     <Text style={styles.badgeText}>AI SCANNING ACTIVE</Text>
@@ -149,7 +197,7 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
                 <Text style={styles.hint}>Taps to capture waste</Text>
              </View>
           </View>
-        </CameraView>
+        </View>
       ) : (
         <View style={styles.previewContainer}>
           <Image source={{ uri: photo.uri }} style={styles.preview} />
@@ -197,13 +245,35 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'space-between', padding: 30 },
+  cameraContainer: { flex: 1, position: 'relative' },
+  overlay: { 
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.2)', 
+    justifyContent: 'space-between', 
+    padding: 30 
+  },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 30 },
-  glassBtn: { 
-    width: 44, height: 44, borderRadius: 22, 
+  backBtn: { 
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)', 
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)'
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.3)'
+  },
+  backText: { color: '#fff', fontSize: 14, fontWeight: '700', marginLeft: 4 },
+  galleryBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   badge: { 
     flexDirection: 'row', alignItems: 'center', 

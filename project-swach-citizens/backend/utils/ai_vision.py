@@ -14,6 +14,7 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
 
     try:
         from google import genai
+        from google.genai import types
 
         client = genai.Client(api_key=api_key)
 
@@ -21,29 +22,55 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
             image_data = f.read()
 
         prompt = """
-        Analyze this image for a waste management system. 
-        1. Does it contain garbage, waste, or litter in a public or private area?
-        2. Specifically, look for piles of trash, overflowing bins, or illegal dumping.
-        3. If it is waste, return 'VALID'. Otherwise, return 'INVALID' with a short reason.
+        Analyze this image for a municipal waste management system. 
+        Does this image contain garbage, waste, litter, or overflowing trash?
         
-        Format:
-        VALID: [Confidence 0-1]
-        OR
-        INVALID: [Reason]
+        Respond with 'YES' if it contains waste, or 'NO' if it is a clean area.
+        Follow your answer with a very short reason.
+        
+        Example: YES - Piles of plastic waste on street.
+        Example: NO - Clean sidewalk.
         """
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=[prompt, {"mime_type": "image/jpeg", "data": image_data}],
+            contents=[
+                prompt, 
+                types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+            ]
         )
-        text = response.text.upper()
+        
+        import re
+        raw_text = response.text.strip()
+        print(f"AI Pipeline Response: {raw_text}") # For backend debugging
+        
+        # Clean text of leading non-alphanumeric chars (like "**", "-", ">")
+        clean_text = re.sub(r'^[^a-zA-Z]+', '', raw_text.upper())
+        
+        # Check if it starts with YES (case-insensitive)
+        is_valid = clean_text.startswith("YES")
 
-        if "VALID" in text and "INVALID" not in text:
-            return {"valid": True, "confidence": 0.9, "reason": "Waste detected by AI"}
-        else:
-            reason = text.split("INVALID:")[-1].strip() if "INVALID:" in text else "Not recognized as waste"
-            return {"valid": False, "confidence": 0.0, "reason": reason}
+        return {
+            "valid": is_valid,
+            "confidence": 1.0 if is_valid else 0.0,
+            "reason": raw_text
+        }
 
     except Exception as e:
-        print(f"Gemini AI Error: {e}")
-        return {"valid": True, "confidence": 0.5, "reason": "AI check failed, defaulting to manual verification"}
+        error_msg = str(e)
+        print(f"Gemini AI Error: {error_msg}")
+        
+        # If we hit the free-tier rate limit (15 requests/min), fail-open so testing isn't blocked
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            return {
+                "valid": True, 
+                "confidence": 0.5, 
+                "reason": "API rate limit reached. Auto-accepting for manual review."
+            }
+
+        # Default to False (Reject) for other errors (bad photo, network down)
+        return {
+            "valid": False, 
+            "confidence": 0.0, 
+            "reason": f"AI check unavailable. Ensure photo is clear."
+        }

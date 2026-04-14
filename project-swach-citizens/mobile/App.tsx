@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, StatusBar, Alert } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Map as MapIcon, List, Plus } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -11,6 +12,7 @@ import ReportView from './views/ReportView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'feed' | 'map' | 'report'>('feed');
+  const [previousTab, setPreviousTab] = useState<'feed' | 'map'>('feed');
   const [userHash, setUserHash] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -19,7 +21,7 @@ export default function App() {
 
   const fetchComplaints = async () => {
     try {
-      const response = await axios.get(`${API_URL}/feed`, { timeout: 10000 });
+      const response = await axios.get(`${API_URL}/feed`, { timeout: 8000 });
       setComplaints(response.data);
     } catch (err: any) {
       console.log('Global fetch failed:', err.message);
@@ -28,108 +30,137 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    (async () => {
+  const initializeApp = async () => {
+    try {
+      setLoading(true);
+      
+      // 1. Get/Create User Hash
+      let hash = await AsyncStorage.getItem('userHash');
+      if (!hash) {
+        hash = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        await AsyncStorage.setItem('userHash', hash);
+      }
+      setUserHash(hash);
+
+      // 2. Get User Points
+      const points = await AsyncStorage.getItem('userPoints');
+      setUserPoints(points ? parseInt(points) : 0);
+
+      // 3. Request Location with Timeout
       try {
-        // 1. Get/Create User Hash
-        let hash = await AsyncStorage.getItem('userHash');
-        if (!hash) {
-          hash = Math.random().toString(36).substring(2) + Date.now().toString(36);
-          await AsyncStorage.setItem('userHash', hash);
-        }
-        setUserHash(hash);
-
-        // 2. Get User Points
-        const points = await AsyncStorage.getItem('userPoints');
-        setUserPoints(points ? parseInt(points) : 0);
-
-        // 3. Request Location
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          // Add a 5s timeout to getCurrentPositionAsync to prevent hanging
+          const locationPromise = Location.getCurrentPositionAsync({ 
+            accuracy: Location.Accuracy.Balanced 
+          });
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Location timeout')), 5000)
+          );
+          
+          const loc = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
           setLocation(loc);
         }
-
-        // 4. Initial Fetch
-        await fetchComplaints();
-      } catch (e) {
-        console.error("Init error", e);
+      } catch (locError) {
+        console.log("Location fetch failed or timed out, skipping...", locError);
       }
-    })();
+
+      // 4. Initial Fetch
+      await fetchComplaints();
+    } catch (e) {
+      console.error("Initialization error", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    initializeApp();
   }, []);
 
   const handleReportSuccess = async (pointsWon: number) => {
-    const newPoints = userPoints + pointsWon;
-    setUserPoints(newPoints);
-    await AsyncStorage.setItem('userPoints', newPoints.toString());
-    
-    // Refresh feed and return
-    setLoading(true);
-    await fetchComplaints();
-    setActiveTab('feed');
+    try {
+      const newPoints = userPoints + pointsWon;
+      setUserPoints(newPoints);
+      await AsyncStorage.setItem('userPoints', newPoints.toString());
+      
+      // Refresh feed and return
+      setLoading(true);
+      await fetchComplaints();
+      setActiveTab('feed');
+    } catch (e) {
+      console.error("Report success refresh error", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      
-      {/* Header */}
-      {activeTab !== 'report' && (
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Project Swach</Text>
-          <View style={styles.pointsBadge}>
-            <Text style={styles.pointsText}>{userPoints} pts</Text>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        
+        {/* Header */}
+        {activeTab !== 'report' && (
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Project Swach</Text>
+            <View style={styles.pointsBadge}>
+              <Text style={styles.pointsText}>{userPoints} pts</Text>
+            </View>
           </View>
+        )}
+
+        {/* Main Content */}
+        <View style={styles.content}>
+          {activeTab === 'feed' && (
+              <FeedView 
+                  complaints={complaints} 
+                  loading={loading} 
+                  onRefresh={fetchComplaints} 
+                  userHash={userHash} 
+              />
+          )}
+          {activeTab === 'map' && (
+              <MapView 
+                  complaints={complaints} 
+                  loading={loading} 
+              />
+          )}
+          {activeTab === 'report' && (
+              <ReportView 
+                  onCancel={() => setActiveTab(previousTab)} 
+                  onSuccess={handleReportSuccess} 
+                  initialLocation={location}
+                  userHash={userHash}
+              />
+          )}
         </View>
-      )}
 
-      {/* Main Content */}
-      <View style={styles.content}>
-        {activeTab === 'feed' && (
-            <FeedView 
-                complaints={complaints} 
-                loading={loading} 
-                onRefresh={fetchComplaints} 
-                userHash={userHash} 
-            />
-        )}
-        {activeTab === 'map' && (
-            <MapView 
-                complaints={complaints} 
-                loading={loading} 
-            />
-        )}
-        {activeTab === 'report' && (
-            <ReportView 
-                onCancel={() => setActiveTab('feed')} 
-                onSuccess={handleReportSuccess} 
-                initialLocation={location}
-                userHash={userHash}
-            />
-        )}
-      </View>
+        {/* Bottom Navigation */}
+        {activeTab !== 'report' && (
+          <View style={styles.navBar}>
+            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
+              <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={24} />
+              <Text style={[styles.navText, activeTab === 'feed' && styles.navTextActive]}>Feed</Text>
+            </TouchableOpacity>
 
-      {/* Bottom Navigation */}
-      {activeTab !== 'report' && (
-        <View style={styles.navBar}>
-          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
-            <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={24} />
-            <Text style={[styles.navText, activeTab === 'feed' && styles.navTextActive]}>Feed</Text>
-          </TouchableOpacity>
+            <View style={styles.reportBtnContainer}>
+              <TouchableOpacity style={styles.reportBtn} onPress={() => {
+                  setPreviousTab(activeTab as 'feed' | 'map');
+                  setActiveTab('report');
+              }}>
+                  <Plus color="#fff" size={32} />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.reportBtnContainer}>
-            <TouchableOpacity style={styles.reportBtn} onPress={() => setActiveTab('report')}>
-                <Plus color="#fff" size={32} />
+            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
+              <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={24} />
+              <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
-            <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={24} />
-            <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </SafeAreaView>
+        )}
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

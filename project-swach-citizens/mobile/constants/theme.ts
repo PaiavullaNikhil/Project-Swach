@@ -11,4 +11,4 @@ export const COLORS = {
   border: '#E5E7EB',
 };
 
-export const API_URL = 'http://10.228.230.134:8000'; // Replace with local IP for device testing
+export const API_URL = 'http://10.168.171.134:8000'; // Replace with local IP for device testing
