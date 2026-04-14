@@ -1,0 +1,78 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { AlertCircle, ArrowUp, MapPin } from "lucide-react";
+
+interface Complaint {
+  _id: string;
+  photo_url: string;
+  ward: string;
+  upvotes: number;
+  timestamp: string;
+  status: string;
+}
+
+export function PriorityFeed() {
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/complaints")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setComplaints(data.slice(0, 5));
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching complaints:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <div className="glass rounded-2xl p-6 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-primary" />
+          Priority Feed
+        </h3>
+        <button className="text-sm text-primary hover:underline">View All</button>
+      </div>
+
+      <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        {loading ? (
+          <div className="space-y-4">
+             {[1, 2, 3].map(i => <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />)}
+          </div>
+        ) : complaints.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-8">No active complaints found.</div>
+        ) : (
+          complaints.map((c) => (
+            <div key={c._id} className="flex gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/10">
+              <img src={c.photo_url} alt="Waste" className="w-16 h-16 rounded-lg object-cover" />
+              <div className="flex-1 space-y-1">
+                <div className="flex justify-between items-start">
+                  <span className="text-sm font-semibold">{c.ward || "Unknown Area"}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase bg-white/5 px-2 py-0.5 rounded-full">
+                    {new Date(c.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <ArrowUp className="w-3 h-3 text-green-500" />
+                    {c.upvotes || 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {c._id.slice(-4)}
+                  </span>
+                  <span className={c.status === 'Reported' ? 'text-blue-400' : 'text-amber-400'}>{c.status}</span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
