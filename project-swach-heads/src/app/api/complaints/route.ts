@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const client = await clientPromise;
     const db = client.db("swach_db");
 
-    let query: any = {};
+    const query: { status?: string; ward?: string } = {};
     if (status) query.status = status;
     if (ward) query.ward = ward;
 

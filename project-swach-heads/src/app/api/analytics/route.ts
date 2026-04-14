@@ -6,7 +6,47 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db("swach_db");
 
-    // Aggregate Ward Performance
+    // 1. Daily Trend Aggregation (Last 7 Days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const dailyReported = await db.collection("complaints").aggregate([
+      { $match: { timestamp: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+
+    const dailyResolved = await db.collection("complaints").aggregate([
+      { $match: { status: "Cleared", cleared_timestamp: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$cleared_timestamp" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+
+    // Merge daily data for frontend chart
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      const reported = dailyReported.find(r => r._id === dateStr)?.count || 0;
+      const resolved = dailyResolved.find(r => r._id === dateStr)?.count || 0;
+      
+      days.push({ name: dayName, complaints: reported, resolved: resolved });
+    }
+
+    // 2. Ward Performance Aggregation
     const wardPerformance = await db.collection("complaints").aggregate([
       {
         $group: {
@@ -26,6 +66,7 @@ export async function GET() {
     ]).toArray();
 
     return NextResponse.json({
+      dailyTrends: days,
       wardPerformance
     });
   } catch (e) {

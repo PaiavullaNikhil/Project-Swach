@@ -21,6 +21,13 @@ interface ComplaintPin {
   status: string;
 }
 
+interface apiComplaint {
+  _id: string;
+  location: { coordinates: [number, number] };
+  ward?: string;
+  status: string;
+}
+
 export default function LiveMap() {
   const [mounted, setMounted] = useState(false);
   const [pins, setPins] = useState<ComplaintPin[]>([]);
@@ -31,7 +38,7 @@ export default function LiveMap() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const mapPins = data.map((c: any) => ({
+          const mapPins = data.map((c: apiComplaint) => ({
             id: c._id,
             lat: c.location.coordinates[1],
             lng: c.location.coordinates[0],
@@ -51,7 +58,7 @@ export default function LiveMap() {
       <MapContainer 
         center={[12.9345, 77.6265]} 
         zoom={13} 
-        style={{ height: "100%", width: "100%", filter: "invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)" }}
+        style={{ height: "100%", width: "100%" }}
         scrollWheelZoom={true}
       >
         <TileLayer

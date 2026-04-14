@@ -21,6 +21,15 @@ interface Escalation {
   assigned_worker: string;
 }
 
+interface apiComplaint {
+  _id: string;
+  ward?: string;
+  photo_url: string;
+  status: string;
+  timestamp: string;
+  worker_id?: string;
+}
+
 export default function EscalationsPage() {
   const [selected, setSelected] = useState<Escalation | null>(null);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
@@ -33,10 +42,10 @@ export default function EscalationsPage() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const escData = data.filter((c: any) => {
+          const escData = data.filter((c: apiComplaint) => {
             const ageHours = (Date.now() - new Date(c.timestamp).getTime()) / (1000 * 60 * 60);
             return ageHours > 24;
-          }).map((c: any) => ({
+          }).map((c: apiComplaint) => ({
             id: c._id,
             ward: c.ward || "Unknown",
             delay: "24h+",
