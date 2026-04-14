@@ -1,5 +1,6 @@
 import os
 import uuid
+import math
 import hashlib
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -132,6 +133,8 @@ async def get_trending():
     """
     # For now, just sorting by upvotes for simplicity
     return await Complaint.find({"status": {"$ne": "Cleared"}}).sort("-upvotes").limit(5).to_list()
+
+# Worker endpoints removed and delegated to the worker microservice.
 
 if __name__ == "__main__":
     import uvicorn

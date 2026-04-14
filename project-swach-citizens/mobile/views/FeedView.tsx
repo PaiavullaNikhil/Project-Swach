@@ -43,7 +43,22 @@ export default function FeedView({ userHash, complaints, loading, onRefresh }: F
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
-      <Image source={{ uri: item.photo_url }} style={styles.cardImage} />
+      {item.status === 'Cleared' && item.after_photo_url ? (
+        <View style={styles.beforeAfterContainer}>
+          <View style={styles.imageWrapper}>
+            <Image source={{ uri: item.photo_url }} style={styles.splitImage} />
+            <View style={styles.imageOverlay}><Text style={styles.overlayText}>BEFORE</Text></View>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.imageWrapper}>
+            <Image source={{ uri: item.after_photo_url }} style={styles.splitImage} />
+            <View style={[styles.imageOverlay, { backgroundColor: COLORS.primary + '80' }]}><Text style={styles.overlayText}>AFTER</Text></View>
+          </View>
+        </View>
+      ) : (
+        <Image source={{ uri: item.photo_url }} style={styles.cardImage} />
+      )}
+
       
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
@@ -127,6 +142,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   cardImage: { width: '100%', height: 200 },
+  beforeAfterContainer: { flexDirection: 'row', width: '100%', height: 200 },
+  imageWrapper: { flex: 1, position: 'relative' },
+  splitImage: { width: '100%', height: '100%' },
+  divider: { width: 3, backgroundColor: '#fff', zIndex: 10 },
+  imageOverlay: { position: 'absolute', bottom: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  overlayText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   cardContent: { padding: 16 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   statusBadge: { backgroundColor: COLORS.primary + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },

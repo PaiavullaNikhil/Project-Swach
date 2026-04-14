@@ -1,0 +1,17 @@
+# API Framework
+fastapi
+uvicorn
+
+# Database & ODM
+beanie
+motor
+pydantic-settings
+
+# Utilities
+python-multipart
+cloudinary
+shapely
+python-dotenv
+
+# AI & Vision
+google-genai
