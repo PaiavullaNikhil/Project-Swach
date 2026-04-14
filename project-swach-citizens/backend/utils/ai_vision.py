@@ -22,33 +22,29 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
             image_data = f.read()
 
         prompt = """
-        Analyze this image for a municipal waste management system. 
-        Does this image contain garbage, waste, litter, or overflowing trash?
+        You are a highly sensitive trash detection AI.
+        Look closely at the image. Is there ANY form of garbage, waste, litter, plastic, debris, swept piles, or overflowing trash bins?
+        Even a small amount of visible litter should be counted as waste!
         
-        Respond with 'YES' if it contains waste, or 'NO' if it is a clean area.
-        Follow your answer with a very short reason.
-        
-        Example: YES - Piles of plastic waste on street.
-        Example: NO - Clean sidewalk.
+        Format your response exactly like this:
+        YES - [Brief reason what trash is visible]
+        or
+        NO - [Brief reason why it looks completely clean]
         """
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-flash-latest",
             contents=[
                 prompt, 
                 types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
             ]
         )
         
-        import re
         raw_text = response.text.strip()
         print(f"AI Pipeline Response: {raw_text}") # For backend debugging
         
-        # Clean text of leading non-alphanumeric chars (like "**", "-", ">")
-        clean_text = re.sub(r'^[^a-zA-Z]+', '', raw_text.upper())
-        
-        # Check if it starts with YES (case-insensitive)
-        is_valid = clean_text.startswith("YES")
+        # Look for YES in the first few characters to handle any markdown like **YES**
+        is_valid = "YES" in raw_text[:15].upper()
 
         return {
             "valid": is_valid,
@@ -60,12 +56,13 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
         error_msg = str(e)
         print(f"Gemini AI Error: {error_msg}")
         
-        # If we hit the free-tier rate limit (15 requests/min), fail-open so testing isn't blocked
+        # If we hit the free-tier rate limit, returning True causes confusion. 
+        # Better to return False with a clear message so the user knows they are being throttled.
         if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
             return {
-                "valid": True, 
-                "confidence": 0.5, 
-                "reason": "API rate limit reached. Auto-accepting for manual review."
+                "valid": False, 
+                "confidence": 0.0, 
+                "reason": "Google API Rate Limit Reached. Please wait 60 seconds before submitting another photo."
             }
 
         # Default to False (Reject) for other errors (bad photo, network down)
