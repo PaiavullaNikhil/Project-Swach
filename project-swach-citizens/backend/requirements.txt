@@ -1,6 +1,7 @@
 # API Framework
 fastapi
-uvicorn
+uvicorn[standard]
+python-socketio
 
 # Database & ODM
 beanie
