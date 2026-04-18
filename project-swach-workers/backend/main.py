@@ -181,9 +181,13 @@ async def update_location(worker_id: str, lat: float = Form(...), lon: float = F
     
     return {"status": "SUCCESS"}
 
-@app.get("/worker/tasks", response_model=List[Complaint])
-async def get_worker_tasks():
-    return await Complaint.find({"status": {"$in": ["Reported", "Assigned"]}}).sort("-upvotes").to_list()
+@app.get("/worker/tasks/{worker_id}", response_model=List[Complaint])
+async def get_worker_tasks(worker_id: str):
+    # Only return tasks explicitly assigned to THIS worker.
+    return await Complaint.find({
+        "worker_id": worker_id,
+        "status": {"$in": ["Assigned", "On the way", "Work in progress", "Cleared"]} # Show all recent assigned stuff
+    }).sort("-timestamp").to_list()
 
 @app.post("/worker/accept/{complaint_id}")
 async def worker_accept(

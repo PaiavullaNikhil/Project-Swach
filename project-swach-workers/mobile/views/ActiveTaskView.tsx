@@ -18,6 +18,55 @@ interface ActiveTaskViewProps {
 export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBack, onRefreshedTask, onProceedToCapture }: ActiveTaskViewProps) {
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [routeCoords, setRouteCoords] = useState<{latitude: number; longitude: number}[]>([]);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null); // in meters
+  const [routeDuration, setRouteDuration] = useState<number | null>(null); // in seconds
+  const lastRouteFetchRef = React.useRef<{lat: number; lon: number} | null>(null);
+  const mapRef = React.useRef<MapView | null>(null);
+
+  // Fetch road-based route from OSRM (free, no API key needed)
+  const fetchRoute = async (fromLat: number, fromLon: number, toLat: number, toLon: number) => {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
+      const response = await axios.get(url, { timeout: 8000 });
+      
+      if (response.data?.routes?.length > 0) {
+        const route = response.data.routes[0];
+        const coords = route.geometry.coordinates.map((coord: number[]) => ({
+          latitude: coord[1],
+          longitude: coord[0],
+        }));
+        setRouteCoords(coords);
+        setRouteDistance(route.distance); // meters
+        setRouteDuration(route.duration); // seconds
+        lastRouteFetchRef.current = { lat: fromLat, lon: fromLon };
+
+        // Fit map to show entire route
+        if (mapRef.current && coords.length > 1) {
+          mapRef.current.fitToCoordinates(coords, {
+            edgePadding: { top: 80, right: 60, bottom: 250, left: 60 },
+            animated: true,
+          });
+        }
+      }
+    } catch (e) {
+      console.log("Route fetch failed, using straight line fallback:", e);
+      // Fallback: straight line
+      setRouteCoords([
+        { latitude: fromLat, longitude: fromLon },
+        { latitude: toLat, longitude: toLon },
+      ]);
+    }
+  };
+
+  // Calculate distance between two points (for re-fetch threshold)
+  const getDistanceBetween = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
 
   React.useEffect(() => {
     let watchSubscription: Location.LocationSubscription | null = null;
@@ -29,7 +78,14 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
         // 1. Instant load from cache
         const lastLoc = await Location.getLastKnownPositionAsync();
-        if (lastLoc) setUserLocation(lastLoc);
+        if (lastLoc) {
+          setUserLocation(lastLoc);
+          // Fetch initial route
+          fetchRoute(
+            lastLoc.coords.latitude, lastLoc.coords.longitude,
+            task.location?.coordinates[1], task.location?.coordinates[0]
+          );
+        }
 
         // 2. Start live watching for movement AND rotation (heading)
         watchSubscription = await Location.watchPositionAsync(
@@ -40,6 +96,26 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
           },
           async (loc) => {
             setUserLocation(loc);
+
+            // Re-fetch route if worker moved 500m+ from last route fetch
+            if (lastRouteFetchRef.current) {
+              const movedDist = getDistanceBetween(
+                lastRouteFetchRef.current.lat, lastRouteFetchRef.current.lon,
+                loc.coords.latitude, loc.coords.longitude
+              );
+              if (movedDist > 500) {
+                fetchRoute(
+                  loc.coords.latitude, loc.coords.longitude,
+                  task.location?.coordinates[1], task.location?.coordinates[0]
+                );
+              }
+            } else {
+              fetchRoute(
+                loc.coords.latitude, loc.coords.longitude,
+                task.location?.coordinates[1], task.location?.coordinates[0]
+              );
+            }
+
             // Sync with backend for citizen tracking
             try {
               const geoData = new FormData();
@@ -60,6 +136,21 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
       if (watchSubscription) watchSubscription.remove();
     };
   }, [task.worker_status]);
+
+  // Format helpers
+  const formatDistance = (meters: number) => {
+    if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+    return `${Math.round(meters)} m`;
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${Math.round(seconds)} sec`;
+    const mins = Math.round(seconds / 60);
+    if (mins < 60) return `${mins} min`;
+    const hrs = Math.floor(mins / 60);
+    const remainMins = mins % 60;
+    return `${hrs}h ${remainMins}m`;
+  };
 
   const handleAction = async (action: 'accept' | 'status', payloadValue?: string) => {
     try {
@@ -105,6 +196,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
         // --- FULL SCREEN NAVIGATION UI ---
         <>
           <MapView 
+            ref={mapRef}
             style={StyleSheet.absoluteFillObject}
             initialRegion={{
               latitude: (userLocation.coords.latitude + task.location?.coordinates[1]) / 2,
@@ -129,20 +221,30 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               image={require('../assets/trash.png')}
             />
             
-            <Polyline
-              coordinates={[
-                { latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude },
-                { latitude: task.location?.coordinates[1], longitude: task.location?.coordinates[0] }
-              ]}
-              strokeColor={COLORS.primary}
-              strokeWidth={4}
-              lineDashPattern={[5, 10]}
-            />
+            {routeCoords.length > 1 && (
+              <Polyline
+                coordinates={routeCoords}
+                strokeColor={COLORS.primary}
+                strokeWidth={5}
+              />
+            )}
           </MapView>
           
           <View style={styles.floatingDashboard}>
              <View style={styles.dashboardHeader}>
                 <Text style={styles.dashboardTitle}>Navigating to Cleanup Site</Text>
+                {routeDistance != null && routeDuration != null && (
+                  <View style={styles.etaRow}>
+                    <View style={styles.etaChip}>
+                      <Navigation size={14} color={COLORS.primary} />
+                      <Text style={styles.etaText}>{formatDistance(routeDistance)}</Text>
+                    </View>
+                    <View style={styles.etaChip}>
+                      <Clock size={14} color={COLORS.accent} />
+                      <Text style={styles.etaText}>{formatDuration(routeDuration)}</Text>
+                    </View>
+                  </View>
+                )}
              </View>
              
              <TouchableOpacity 
@@ -244,5 +346,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2, shadowRadius: 10, elevation: 10
   },
   dashboardHeader: { alignItems: 'center', marginBottom: 16 },
-  dashboardTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text }
+  dashboardTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  etaRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 8 },
+  etaChip: { 
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 
+  },
+  etaText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
 });

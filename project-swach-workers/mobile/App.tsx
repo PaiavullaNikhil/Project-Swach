@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, StatusBar, Alert, ActivityIndicator, BackHandler } from 'react-native';
 import { LogOut } from 'lucide-react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -22,10 +22,12 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [socket, setSocket] = useState<any>(null);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (workerId?: string) => {
+    const id = workerId || worker?.worker_id;
+    if (!id) return;
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/worker/tasks`, { timeout: 8000 });
+      const response = await axios.get(`${API_URL}/worker/tasks/${id}`, { timeout: 8000 });
       setTasks(response.data);
     } catch (err: any) {
       console.log('Worker tasks fetch failed:', err.message);
@@ -47,10 +49,11 @@ export default function App() {
     const savedWorker = await AsyncStorage.getItem('workerData');
     const savedVehicle = await AsyncStorage.getItem('vehicleData');
     if (savedWorker && savedVehicle) {
-      setWorker(JSON.parse(savedWorker));
+      const parsedWorker = JSON.parse(savedWorker);
+      setWorker(parsedWorker);
       setVehicle(JSON.parse(savedVehicle));
       setActiveScreen('tasks');
-      fetchTasks();
+      fetchTasks(parsedWorker.worker_id);
     }
   };
 
@@ -87,34 +90,47 @@ export default function App() {
     }
   };
 
+  // Keep a ref to activeScreen so BackHandler doesn't need activeScreen in deps
+  const activeScreenRef = useRef(activeScreen);
   useEffect(() => {
-    // Initialize Socket
-    const newSocket = io(API_URL, {
-      path: '/ws/socket.io',
-      transports: ['websocket'],
-    });
-    setSocket(newSocket);
+    activeScreenRef.current = activeScreen;
+  }, [activeScreen]);
 
+  useEffect(() => {
     const init = async () => {
       await checkAuth();
       await updateLocation();
     };
     init();
+  }, []);
 
+  // Socket: initialize ONCE, not on every screen change
+  useEffect(() => {
+    const newSocket = io(API_URL, {
+      path: '/ws/socket.io',
+      transports: ['websocket'],
+    });
+    setSocket(newSocket);
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  // BackHandler: uses ref so it doesn't re-create on screen changes
+  useEffect(() => {
     const backAction = () => {
-      if (activeScreen !== 'tasks') {
+      if (activeScreenRef.current !== 'tasks' && activeScreenRef.current !== 'login') {
         setActiveScreen('tasks');
-        return true; 
+        return true;
       }
-      return false; 
+      return false;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => {
-      newSocket.close();
       backHandler.remove();
     };
-  }, [activeScreen]);
+  }, []);
 
   useEffect(() => {
     if (socket && location && worker) {
