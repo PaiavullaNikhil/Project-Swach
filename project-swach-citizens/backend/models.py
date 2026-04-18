@@ -24,9 +24,33 @@ class Complaint(Document):
     
     # Worker Section
     worker_id: Optional[str] = None
+    worker_name: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    vehicle_type: Optional[str] = None
     worker_status: Optional[str] = None # Assigned, On the way, Work in progress, Completed
+    worker_location: Optional[GeoJSONPoint] = None
     after_photo_url: Optional[str] = None
     cleared_timestamp: Optional[datetime] = None
+
+
+class Worker(Document):
+    name: str
+    worker_id: str
+    phone: str
+    assigned_vehicle_id: Optional[str] = None
+    status: str = "Active"
+    
+    class Settings:
+        name = "workers"
+
+
+class Vehicle(Document):
+    plate_number: str
+    vehicle_type: str
+    status: str = "Available" # Available, In Use, Maintenance
+
+    class Settings:
+        name = "vehicles"
 
 
     class Settings:

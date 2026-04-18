@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, UserCheck, UserPlus, Star, MapPin, Clock } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Worker {
   name: string;
@@ -16,15 +16,35 @@ interface Worker {
 
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchWorkers = async () => {
+    try {
+      const res = await fetch("/api/workers");
+      const data = await res.json();
+      if (Array.isArray(data)) setWorkers(data);
+    } catch (err) {
+      console.error("Error fetching workers:", err);
+    }
+  };
+
+  const fetchVehicles = async () => {
+    try {
+      const res = await fetch("/api/vehicles");
+      const data = await res.json();
+      if (Array.isArray(data)) setVehicles(data);
+    } catch (err) {
+      console.error("Error fetching vehicles:", err);
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/workers")
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setWorkers(data);
-      })
-      .catch(err => console.error("Error fetching workers:", err));
+    fetchWorkers();
+    fetchVehicles();
 
     fetch("/api/stats")
       .then(res => res.json())
@@ -34,6 +54,30 @@ export default function WorkersPage() {
       .catch(err => console.error("Error fetching worker stats:", err));
   }, []);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/workers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        setShowModal(false);
+        setFormData({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
+        fetchWorkers();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to create worker");
+      }
+    } catch (err) {
+      alert("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex justify-between items-center">
@@ -41,11 +85,107 @@ export default function WorkersPage() {
           <h2 className="text-3xl font-bold tracking-tight">Worker Management</h2>
           <p className="text-muted-foreground mt-1">Track and manage field staff performance</p>
         </div>
-        <button className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-medium hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+        <button 
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-medium hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+        >
           <UserPlus className="w-4 h-4" />
           Add New Worker
         </button>
       </header>
+
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl"
+            >
+              <h3 className="text-2xl font-bold mb-6">Register New Field Worker</h3>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Full Name</label>
+                  <input 
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. Ramesh Kumar"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
+                  />
+                </div>
+                <div className="flex gap-4">
+                   <div className="flex-1">
+                      <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Worker ID</label>
+                      <input 
+                        required
+                        value={formData.worker_id}
+                        onChange={(e) => setFormData({ ...formData, worker_id: e.target.value.toUpperCase() })}
+                        placeholder="W001"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
+                      />
+                   </div>
+                   <div className="flex-1">
+                      <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Ward</label>
+                      <input 
+                        required
+                        value={formData.ward}
+                        onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
+                        placeholder="HSR Layout"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
+                      />
+                   </div>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Phone Number</label>
+                  <input 
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+91 9876543210"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Assigned Vehicle (Optional)</label>
+                  <select 
+                    value={formData.assigned_vehicle_id}
+                    onChange={(e) => setFormData({ ...formData, assigned_vehicle_id: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary/50 transition-all appearance-none"
+                  >
+                    <option value="" className="bg-zinc-900 text-muted-foreground">No Vehicle (Self-selection at login)</option>
+                    {vehicles.map(v => (
+                      <option key={v.plate_number} value={v.plate_number} className="bg-zinc-900">
+                        {v.plate_number} - {v.vehicle_type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                        setShowModal(false);
+                        setFormData({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl font-bold border border-white/10 hover:bg-white/5 transition-all text-sm"
+                  >
+                    CANCEL
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={submitting}
+                    className="flex-1 bg-primary text-white px-4 py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
+                  >
+                    {submitting ? "REGISTERING..." : "CONFIRM"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Quick Stats - Connected to API */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

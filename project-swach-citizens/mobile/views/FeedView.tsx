@@ -9,9 +9,10 @@ interface FeedViewProps {
   complaints: any[];
   loading: boolean;
   onRefresh: () => void;
+  onSelectComplaint: (complaint: any) => void;
 }
 
-export default function FeedView({ userHash, complaints, loading, onRefresh }: FeedViewProps) {
+export default function FeedView({ userHash, complaints, loading, onRefresh, onSelectComplaint }: FeedViewProps) {
   const [localComplaints, setLocalComplaints] = useState<any[]>(complaints);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +43,7 @@ export default function FeedView({ userHash, complaints, loading, onRefresh }: F
   };
 
   const renderItem = ({ item }: { item: any }) => (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => onSelectComplaint(item)}>
       {item.status === 'Cleared' && item.after_photo_url ? (
         <View style={styles.beforeAfterContainer}>
           <View style={styles.imageWrapper}>
@@ -96,7 +97,7 @@ export default function FeedView({ userHash, complaints, loading, onRefresh }: F
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (

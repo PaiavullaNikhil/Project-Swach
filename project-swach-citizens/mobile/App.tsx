@@ -5,19 +5,23 @@ import { Map as MapIcon, List, Plus } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import axios from 'axios';
-import { COLORS, API_URL } from './constants/theme';
+import { io } from 'socket.io-client';
+import { COLORS, API_URL, SOCKET_URL } from './constants/theme';
 import FeedView from './views/FeedView';
 import MapView from './views/MapView';
 import ReportView from './views/ReportView';
+import TrackingView from './views/TrackingView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'map' | 'report'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'map' | 'report' | 'tracking'>('feed');
   const [previousTab, setPreviousTab] = useState<'feed' | 'map'>('feed');
+  const [selectedComplaint, setSelectedComplaint] = useState<any | null>(null);
   const [userHash, setUserHash] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [complaints, setComplaints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [socket, setSocket] = useState<any>(null);
 
   const fetchComplaints = async () => {
     try {
@@ -75,7 +79,25 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Initialize Socket
+    const newSocket = io(SOCKET_URL, {
+      path: '/ws/socket.io',
+      transports: ['websocket'],
+    });
+    setSocket(newSocket);
+
+    newSocket.on('status_update', (data) => {
+      console.log('Real-time status update:', data);
+      setComplaints(prev => prev.map(c => 
+        c._id === data.complaint_id ? { ...c, status: data.status, worker_status: data.worker_status || data.status } : c
+      ));
+    });
+
     initializeApp();
+
+    return () => {
+      newSocket.close();
+    };
   }, []);
 
   const handleReportSuccess = async (pointsWon: number) => {
@@ -87,7 +109,10 @@ export default function App() {
       // Refresh feed and return
       setLoading(true);
       await fetchComplaints();
-      setActiveTab('feed');
+      
+      // If we were in tracking mode, we might want to stay there or refresh. 
+      // For now, return to feed or map.
+      setActiveTab(previousTab);
     } catch (e) {
       console.error("Report success refresh error", e);
     } finally {
@@ -118,12 +143,22 @@ export default function App() {
                   loading={loading} 
                   onRefresh={fetchComplaints} 
                   userHash={userHash} 
+                  onSelectComplaint={(c) => {
+                    setSelectedComplaint(c);
+                    setPreviousTab('feed');
+                    setActiveTab('tracking');
+                  }}
               />
           )}
           {activeTab === 'map' && (
               <MapView 
                   complaints={complaints} 
                   loading={loading} 
+                  onSelectComplaint={(c) => {
+                    setSelectedComplaint(c);
+                    setPreviousTab('map');
+                    setActiveTab('tracking');
+                  }}
               />
           )}
           {activeTab === 'report' && (
@@ -134,10 +169,16 @@ export default function App() {
                   userHash={userHash}
               />
           )}
+          {activeTab === 'tracking' && selectedComplaint && (
+              <TrackingView
+                  complaint={selectedComplaint}
+                  onBack={() => setActiveTab(previousTab)}
+              />
+          )}
         </View>
 
         {/* Bottom Navigation */}
-        {activeTab !== 'report' && (
+        {activeTab !== 'report' && activeTab !== 'tracking' && (
           <View style={styles.navBar}>
             <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
               <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={24} />

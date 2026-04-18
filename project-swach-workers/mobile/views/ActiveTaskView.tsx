@@ -9,12 +9,13 @@ import { COLORS, API_URL } from '../constants/theme';
 interface ActiveTaskViewProps {
   task: any;
   workerHash: string;
+  vehicleNumber: string;
   onGoBack: () => void;
   onRefreshedTask: (task: any) => void;
   onProceedToCapture: () => void;
 }
 
-export default function ActiveTaskView({ task, workerHash, onGoBack, onRefreshedTask, onProceedToCapture }: ActiveTaskViewProps) {
+export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBack, onRefreshedTask, onProceedToCapture }: ActiveTaskViewProps) {
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
 
@@ -34,11 +35,20 @@ export default function ActiveTaskView({ task, workerHash, onGoBack, onRefreshed
         watchSubscription = await Location.watchPositionAsync(
           { 
             accuracy: Location.Accuracy.High, 
-            distanceInterval: 5, // Update every 5 meters
-            timeInterval: 2000    // Or every 2 seconds
+            distanceInterval: 10, // Update every 10 meters
+            timeInterval: 10000    // Or every 10 seconds
           },
-          (loc) => {
+          async (loc) => {
             setUserLocation(loc);
+            // Sync with backend for citizen tracking
+            try {
+              const geoData = new FormData();
+              geoData.append('lat', loc.coords.latitude.toString());
+              geoData.append('lon', loc.coords.longitude.toString());
+              await axios.post(`${API_URL}/worker/location/${workerHash}`, geoData);
+            } catch (e) {
+              console.log("Location sync failed", e);
+            }
           }
         );
       }
@@ -60,6 +70,7 @@ export default function ActiveTaskView({ task, workerHash, onGoBack, onRefreshed
       if (action === 'accept') {
         url = `${API_URL}/worker/accept/${task._id}`;
         formData.append('user_hash', workerHash);
+        formData.append('vehicle_number', vehicleNumber);
       } else {
         url = `${API_URL}/worker/status/${task._id}`;
         formData.append('status', payloadValue!);

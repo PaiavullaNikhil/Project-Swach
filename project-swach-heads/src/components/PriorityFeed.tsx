@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowUp, MapPin } from "lucide-react";
+import { AlertCircle, ArrowUp, MapPin, UserPlus } from "lucide-react";
+import { AssignmentModal } from "./AssignmentModal";
 
 interface Complaint {
   _id: string;
@@ -15,8 +16,10 @@ interface Complaint {
 export function PriorityFeed() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchComplaints = () => {
+    setLoading(true);
     fetch("/api/complaints")
       .then(res => res.json())
       .then(data => {
@@ -27,7 +30,15 @@ export function PriorityFeed() {
         console.error("Error fetching complaints:", err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchComplaints();
   }, []);
+
+  const handleSuccess = () => {
+    fetchComplaints();
+  };
 
   return (
     <div className="glass rounded-2xl p-6 h-full flex flex-col">
@@ -48,14 +59,25 @@ export function PriorityFeed() {
           <div className="text-sm text-muted-foreground text-center py-8">No active complaints found.</div>
         ) : (
           complaints.map((c) => (
-            <div key={c._id} className="flex gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/10">
+            <div 
+              key={c._id} 
+              onClick={() => c.status === 'Reported' && setSelectedComplaintId(c._id)}
+              className="flex gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/10"
+            >
               <img src={c.photo_url} alt="Waste" className="w-16 h-16 rounded-lg object-cover" />
               <div className="flex-1 space-y-1">
                 <div className="flex justify-between items-start">
                   <span className="text-sm font-semibold">{c.ward || "Unknown Area"}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase bg-white/5 px-2 py-0.5 rounded-full">
-                    {new Date(c.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {c.status === 'Reported' && (
+                      <div className="p-1 bg-primary/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                        <UserPlus className="w-3 h-3 text-primary" />
+                      </div>
+                    )}
+                    <span className="text-[10px] text-muted-foreground uppercase bg-white/5 px-2 py-0.5 rounded-full">
+                      {new Date(c.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
@@ -66,13 +88,21 @@ export function PriorityFeed() {
                     <MapPin className="w-3 h-3" />
                     {c._id.slice(-4)}
                   </span>
-                  <span className={c.status === 'Reported' ? 'text-blue-400' : 'text-amber-400'}>{c.status}</span>
+                  <span className={c.status === 'Reported' ? 'text-blue-400 font-bold' : 'text-amber-400 font-bold'}>{c.status}</span>
                 </div>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {selectedComplaintId && (
+        <AssignmentModal 
+          complaintId={selectedComplaintId}
+          onClose={() => setSelectedComplaintId(null)}
+          onSuccess={handleSuccess}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 from beanie import init_beanie
-from models import Complaint
+from models import Complaint, Worker, Vehicle
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,10 +22,18 @@ settings = Settings()
 
 
 async def init_db():
-    # Let Beanie create its own client internally via connection_string.
-    # The database name must be in the URI path for get_default_database() to work.
-    uri = settings.mongodb_uri.rstrip("/") + "/" + settings.database_name
+    # Construct URI robustly. 
+    # For Atlas (mongodb+srv), the database name should be after the slash.
+    base_uri = settings.mongodb_uri.split("?")[0].rstrip("/")
+    if not base_uri.endswith(settings.database_name):
+        uri = f"{base_uri}/{settings.database_name}"
+        # Re-append parameters if they existed
+        if "?" in settings.mongodb_uri:
+            uri += "?" + settings.mongodb_uri.split("?")[1]
+    else:
+        uri = settings.mongodb_uri
+        
     await init_beanie(
         connection_string=uri,
-        document_models=[Complaint],
+        document_models=[Complaint, Worker, Vehicle],
     )

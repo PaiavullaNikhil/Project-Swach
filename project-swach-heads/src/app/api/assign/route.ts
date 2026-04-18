@@ -13,10 +13,31 @@ export async function POST(request: Request) {
     const client = await clientPromise;
     const db = client.db("swach_db");
 
-    // Update Complaint
+    // Fetch Worker Info
+    const worker = await db.collection("workers").findOne({ worker_id: worker_id });
+    if (!worker) {
+      return NextResponse.json({ error: "Worker not found" }, { status: 404 });
+    }
+
+    // Fetch Vehicle Info (if assigned)
+    let vehicle = null;
+    if (worker.assigned_vehicle_id) {
+       vehicle = await db.collection("vehicles").findOne({ plate_number: worker.assigned_vehicle_id });
+    }
+
+    // Update Complaint with Snapshots
     const complaintResult = await db.collection("complaints").updateOne(
       { _id: new ObjectId(complaint_id) },
-      { $set: { worker_id: worker_id, status: "Assigned" } }
+      { 
+        $set: { 
+          worker_id: worker_id, 
+          worker_name: worker.name,
+          vehicle_number: vehicle?.plate_number || "Awaiting Vehicle",
+          vehicle_type: vehicle?.vehicle_type || "N/A",
+          status: "Assigned",
+          worker_status: "Assigned"
+        } 
+      }
     );
 
     // Update Worker Status

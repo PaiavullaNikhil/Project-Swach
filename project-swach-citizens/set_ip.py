@@ -30,15 +30,19 @@ def update_theme_ip(ip):
     with open(theme_path, "r") as f:
         content = f.read()
 
-    pattern = r"(export const API_URL = ['\"`]).*?(:8000['\"`];)"
+    pattern = r"(export const API_URL = ['\"`]).*?(:8001['\"`];)"
     replacement = rf"\1http://{ip}\2"
     
-    new_content = re.sub(pattern, replacement, content)
+    # Also update SOCKET_URL
+    content = re.sub(pattern, replacement, content)
+    
+    sock_pattern = r"(export const SOCKET_URL = ['\"`]).*?(:8001['\"`];)"
+    new_content = re.sub(sock_pattern, replacement, content)
 
     with open(theme_path, "w") as f:
         f.write(new_content)
     
-    print(f"🚀 [AUTO-IP] Updated API_URL to http://{ip}:8000 in {theme_path.name}")
+    print(f"🚀 [AUTO-IP] Updated API_URL and SOCKET_URL to http://{ip}:8001 in {theme_path.name}")
 
 if __name__ == "__main__":
     ip = get_local_ip()

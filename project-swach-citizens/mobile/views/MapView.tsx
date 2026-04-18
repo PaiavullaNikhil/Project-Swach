@@ -9,9 +9,10 @@ import wardData from '../assets/wards.json';
 interface MapViewProps {
   complaints: any[];
   loading: boolean;
+  onSelectComplaint: (complaint: any) => void;
 }
 
-export default function MapScreen({ complaints, loading }: MapViewProps) {
+export default function MapScreen({ complaints, loading, onSelectComplaint }: MapViewProps) {
   const [wardHealth, setWardHealth] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
                 longitude: complaint.location.coordinates[0],
               }}
               pinColor={complaint.status === 'Reported' ? COLORS.error : COLORS.primary}
+              onCalloutPress={() => onSelectComplaint(complaint)}
             >
               <Callout>
                 <View style={styles.callout}>

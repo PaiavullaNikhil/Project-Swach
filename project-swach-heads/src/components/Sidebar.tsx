@@ -1,8 +1,8 @@
 "use client";
 
-import { Home, Map, BarChart2, Users, AlertCircle, FileText, Settings, LogOut } from "lucide-react";
+import { Home, Map, BarChart2, Users, AlertCircle, FileText, Settings, LogOut, Truck } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -15,12 +15,20 @@ const navItems = [
   { name: "Live Map", icon: Map, href: "/map" },
   { name: "Analytics", icon: BarChart2, href: "/analytics" },
   { name: "Workers", icon: Users, href: "/workers" },
+  { name: "Vehicles", icon: Truck, href: "/vehicles" },
   { name: "Escalations", icon: AlertCircle, href: "/escalations" },
   { name: "Reports", icon: FileText, href: "/reports" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    localStorage.removeItem("ps_admin_session");
+    document.cookie = "ps_admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    router.push("/login");
+  };
 
   return (
     <div className="w-64 h-screen flex flex-col glass border-r sticky top-0">
@@ -59,7 +67,10 @@ export function Sidebar() {
           <Settings className="w-5 h-5" />
           <span className="font-medium">Settings</span>
         </button>
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-destructive hover:bg-destructive/10 rounded-xl transition-all">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 w-full text-destructive hover:bg-destructive/10 rounded-xl transition-all"
+        >
           <LogOut className="w-5 h-5" />
           <span className="font-medium">Sign Out</span>
         </button>

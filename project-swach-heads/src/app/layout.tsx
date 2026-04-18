@@ -19,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <body className="flex min-h-screen bg-background text-foreground overflow-hidden">
+    <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
+      <body className="flex min-h-screen bg-background text-foreground overflow-hidden" suppressHydrationWarning>
         <Sidebar />
         <main className="flex-1 h-screen overflow-y-auto custom-scrollbar">
           <div className="p-8 max-w-[1600px] mx-auto">

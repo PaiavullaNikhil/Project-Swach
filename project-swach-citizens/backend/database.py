@@ -1,5 +1,5 @@
 from beanie import init_beanie
-from models import Complaint
+from models import Complaint, Worker, Vehicle
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,5 +27,5 @@ async def init_db():
     uri = settings.mongodb_uri.rstrip("/") + "/" + settings.database_name
     await init_beanie(
         connection_string=uri,
-        document_models=[Complaint],
+        document_models=[Complaint, Worker, Vehicle],
     )

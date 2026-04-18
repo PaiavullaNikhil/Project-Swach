@@ -136,6 +136,20 @@ async def get_trending():
 
 # Worker endpoints removed and delegated to the worker microservice.
 
+@app.get("/complaint/{complaint_id}")
+async def get_complaint(complaint_id: str):
+    """
+    Get a single complaint by ID for tracking
+    """
+    try:
+        from bson import ObjectId
+        complaint = await Complaint.get(complaint_id)
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Complaint not found")
+        return complaint
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid complaint ID")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
