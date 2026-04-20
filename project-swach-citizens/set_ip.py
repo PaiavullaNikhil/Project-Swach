@@ -30,19 +30,20 @@ def update_theme_ip(ip):
     with open(theme_path, "r") as f:
         content = f.read()
 
-    pattern = r"(export const API_URL = ['\"`]).*?(:8001['\"`];)"
-    replacement = rf"\1http://{ip}\2"
+    # Match API_URL with any port number
+    api_pattern = r"(export const API_URL = ['\"`])http://[^:]+:\d+(['\"`];)"
+    content = re.sub(api_pattern, rf"\1http://{ip}:8000\2", content)
     
-    # Also update SOCKET_URL
-    content = re.sub(pattern, replacement, content)
-    
-    sock_pattern = r"(export const SOCKET_URL = ['\"`]).*?(:8001['\"`];)"
-    new_content = re.sub(sock_pattern, replacement, content)
+    # Match SOCKET_URL with any port number
+    sock_pattern = r"(export const SOCKET_URL = ['\"`])http://[^:]+:\d+(['\"`];)"
+    content = re.sub(sock_pattern, rf"\1http://{ip}:8001\2", content)
 
     with open(theme_path, "w") as f:
-        f.write(new_content)
+        f.write(content)
     
-    print(f"🚀 [AUTO-IP] Updated API_URL and SOCKET_URL to http://{ip}:8001 in {theme_path.name}")
+    print(f"🚀 [AUTO-IP] Updated theme.ts:")
+    print(f"   API_URL    → http://{ip}:8000 (Citizen Backend)")
+    print(f"   SOCKET_URL → http://{ip}:8001 (Worker Backend / Socket.IO)")
 
 if __name__ == "__main__":
     ip = get_local_ip()

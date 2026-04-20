@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
@@ -22,6 +23,13 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Project Swach - Citizen API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Serve uploaded photos
 os.makedirs("uploads", exist_ok=True)

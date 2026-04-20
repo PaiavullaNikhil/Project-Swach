@@ -10,6 +10,26 @@ class GeoJSONPoint(BaseModel):
     coordinates: List[float]  # [longitude, latitude]
 
 
+class Vehicle(Document):
+    plate_number: str
+    vehicle_type: str
+    status: str = "Available" # Available, In Use, Maintenance
+
+    class Settings:
+        name = "vehicles"
+
+
+class Worker(Document):
+    name: str
+    worker_id: str
+    phone: str
+    assigned_vehicle_id: Optional[str] = None
+    status: str = "Active"
+    
+    class Settings:
+        name = "workers"
+
+
 class Complaint(Document):
     status: str = "Reported"
     upvotes: int = 1
@@ -31,27 +51,6 @@ class Complaint(Document):
     worker_location: Optional[GeoJSONPoint] = None
     after_photo_url: Optional[str] = None
     cleared_timestamp: Optional[datetime] = None
-
-
-class Worker(Document):
-    name: str
-    worker_id: str
-    phone: str
-    assigned_vehicle_id: Optional[str] = None
-    status: str = "Active"
-    
-    class Settings:
-        name = "workers"
-
-
-class Vehicle(Document):
-    plate_number: str
-    vehicle_type: str
-    status: str = "Available" # Available, In Use, Maintenance
-
-    class Settings:
-        name = "vehicles"
-
 
     class Settings:
         name = "complaints"

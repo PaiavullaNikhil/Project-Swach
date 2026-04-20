@@ -11,6 +11,7 @@ export const COLORS = {
   border: '#E5E7EB',
 };
 
-// Unified Backend Port (Standardized on 8001)
-export const API_URL = 'http://10.168.171.134:8001'; 
+// Citizen Backend (REST API)
+export const API_URL = 'http://10.168.171.134:8000'; 
+// Worker Backend (Socket.IO for real-time tracking)
 export const SOCKET_URL = 'http://10.168.171.134:8001'; 
