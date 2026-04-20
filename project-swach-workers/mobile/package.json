@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "python ../set_ip.py && expo start",
-    "android": "python ../set_ip.py && expo start --android",
-    "ios": "python ../set_ip.py && expo start --ios",
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "axios": "^1.15.0",
     "expo": "~54.0.33",
     "expo-camera": "~17.0.10",
+    "expo-constants": "^55.0.14",
     "expo-location": "~19.0.8",
     "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^1.8.0",
