@@ -1,5 +1,6 @@
+import os
 from beanie import init_beanie
-from models import Complaint, Worker, Vehicle
+from models import Complaint, Worker, Vehicle, ChatMessage
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +16,10 @@ class Settings(BaseSettings):
     # AI
     gemini_api_key: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(__file__), ".env"), 
+        extra="ignore"
+    )
 
 
 settings = Settings()
@@ -30,10 +34,9 @@ async def init_db():
         # Re-append parameters if they existed
         if "?" in settings.mongodb_uri:
             uri += "?" + settings.mongodb_uri.split("?")[1]
-    else:
-        uri = settings.mongodb_uri
-        
+    print(f"DEBUG: Initializing database connection to: {uri.split('@')[-1] if '@' in uri else uri}")
     await init_beanie(
         connection_string=uri,
-        document_models=[Complaint, Worker, Vehicle],
+        document_models=[Complaint, Worker, Vehicle, ChatMessage],
     )
+    print("DEBUG: Database initialized successfully.")

@@ -10,64 +10,132 @@ export async function GET() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const dailyReported = await db.collection("complaints").aggregate([
-      { $match: { timestamp: { $gte: sevenDaysAgo } } },
+    const dailyTrends = await db.collection("complaints").aggregate([
+      {
+        $addFields: {
+          tsDate: { $toDate: "$timestamp" }
+        }
+      },
+      { $match: { tsDate: { $gte: sevenDaysAgo } } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-          count: { $sum: 1 }
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$tsDate" } },
+          complaints: { $sum: 1 },
+          resolved: { $sum: { $cond: [{ $eq: ["$status", "Cleared"] }, 1, 0] } }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          complaints: 1,
+          resolved: 1
+        }
+      }
+    ]).toArray();
+
+    // 2. Hourly Volume (Reports by hour of the day)
+    const hourlyStats = await db.collection("complaints").aggregate([
+      {
+        $addFields: {
+          tsDate: { $toDate: "$timestamp" }
+        }
+      },
+      {
+        $group: {
+          _id: { $hour: "$tsDate" },
+          volume: { $sum: 1 }
         }
       },
       { $sort: { _id: 1 } }
     ]).toArray();
 
-    const dailyResolved = await db.collection("complaints").aggregate([
-      { $match: { status: "Cleared", cleared_timestamp: { $gte: sevenDaysAgo } } },
+    // 3. Status Distribution
+    const statusStats = await db.collection("complaints").aggregate([
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$cleared_timestamp" } },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]).toArray();
-
-    // Merge daily data for frontend chart
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-      
-      const reported = dailyReported.find(r => r._id === dateStr)?.count || 0;
-      const resolved = dailyResolved.find(r => r._id === dateStr)?.count || 0;
-      
-      days.push({ name: dayName, complaints: reported, resolved: resolved });
-    }
-
-    // 2. Ward Performance Aggregation
-    const wardPerformance = await db.collection("complaints").aggregate([
-      {
-        $group: {
-          _id: "$ward",
-          total: { $sum: 1 },
-          cleared: { $sum: { $cond: [{ $eq: ["$status", "Cleared"] }, 1, 0] } }
+          _id: "$status",
+          value: { $sum: 1 }
         }
       },
       {
         $project: {
-          name: "$_id",
-          total: 1,
+          _id: 0,
+          name: { $ifNull: ["$_id", "Unknown"] },
+          value: 1
+        }
+      }
+    ]).toArray();
+
+    // 4. Ward Performance & Resolution Time
+    const wardPerformance = await db.collection("complaints").aggregate([
+      {
+        $addFields: {
+          tsDate: { $toDate: "$timestamp" },
+          clearedDate: { $cond: [{ $ne: ["$cleared_timestamp", null] }, { $toDate: "$cleared_timestamp" }, null] }
+        }
+      },
+      {
+        $group: {
+          _id: "$ward",
+          total: { $sum: 1 },
+          cleared: { $sum: { $cond: [{ $eq: ["$status", "Cleared"] }, 1, 0] } },
+          avgResolutionTime: {
+            $avg: {
+              $cond: [
+                { $and: [{ $eq: ["$status", "Cleared"] }, { $ne: ["$clearedDate", null] }] },
+                { $divide: [{ $subtract: ["$clearedDate", "$tsDate"] }, 3600000] }, // In hours
+                null
+              ]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: { $ifNull: ["$_id", "Unknown"] },
           cleared: 1,
-          active: { $subtract: ["$total", "$cleared"] }
+          total: 1,
+          active: { $subtract: ["$total", "$cleared"] },
+          avgResolutionTime: 1
+        }
+      }
+    ]).toArray();
+
+    // 5. Ward-wise Best Workers
+    const bestWorkers = await db.collection("complaints").aggregate([
+      { $match: { status: "Cleared", worker_id: { $ne: null } } },
+      {
+        $group: {
+          _id: { ward: "$ward", worker_id: "$worker_id", worker_name: "$worker_name" },
+          completions: { $sum: 1 }
+        }
+      },
+      { $sort: { completions: -1 } },
+      {
+        $group: {
+          _id: "$_id.ward",
+          bestWorker: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $project: {
+          ward: "$_id",
+          name: "$bestWorker._id.worker_name",
+          reports: "$bestWorker.completions",
+          rating: { $literal: "99%" } // Placeholder for rating if not available
         }
       }
     ]).toArray();
 
     return NextResponse.json({
-      dailyTrends: days,
-      wardPerformance
+      dailyTrends,
+      hourlyStats,
+      statusStats,
+      wardPerformance,
+      bestWorkers
     });
   } catch (e) {
     console.error(e);

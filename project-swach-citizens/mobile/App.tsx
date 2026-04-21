@@ -50,23 +50,29 @@ export default function App() {
       const points = await AsyncStorage.getItem('userPoints');
       setUserPoints(points ? parseInt(points) : 0);
 
-      // 3. Request Location with Timeout
+      // 3. Request Location (Flash Fast + Precise Fallback)
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          // Add a 5s timeout to getCurrentPositionAsync to prevent hanging
+          // 3a. Get last known position (INSTANT)
+          const lastLoc = await Location.getLastKnownPositionAsync();
+          if (lastLoc) {
+            setLocation(lastLoc);
+          }
+
+          // 3b. Fetch precise position in background with a longer timeout
           const locationPromise = Location.getCurrentPositionAsync({ 
             accuracy: Location.Accuracy.Balanced 
           });
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Location timeout')), 5000)
+            setTimeout(() => reject(new Error('Location timeout')), 15000)
           );
           
           const loc = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
           setLocation(loc);
         }
       } catch (locError) {
-        console.log("Location fetch failed or timed out, skipping...", locError);
+        console.log("Location fetch timeout, using last available position", locError);
       }
 
       // 4. Initial Fetch
@@ -123,7 +129,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         
         {/* Header */}
         {activeTab !== 'report' && (
@@ -206,15 +212,15 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.primary },
   header: {
-    height: 100,
+    height: 80,
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingTop: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -229,7 +235,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   pointsText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  content: { flex: 1 },
+  content: { flex: 1, backgroundColor: COLORS.background },
   navBar: {
     height: 80,
     backgroundColor: COLORS.surface,

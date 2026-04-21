@@ -47,7 +47,7 @@ def get_ward_from_coords(lat: float, lon: float) -> Dict[str, Optional[str]]:
                 return {
                     "ward": f"{ward_name} (Ward {ward_no})",
                     "constituency": constituency,
-                    "mla": "To be assigned",
+                    "mla": f"{constituency} Area",
                 }
 
         return {"ward": "Outside Bangalore Coverage", "constituency": "Unknown", "mla": "Unknown"}
