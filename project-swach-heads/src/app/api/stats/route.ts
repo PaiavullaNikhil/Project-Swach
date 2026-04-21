@@ -13,11 +13,17 @@ export async function GET() {
     const active = await db.collection("complaints").countDocuments({ status: { $ne: "Cleared" } });
     const cleared = await db.collection("complaints").countDocuments({ status: "Cleared" });
     
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const escalated = await db.collection("complaints").countDocuments({
-      status: { $ne: "Cleared" },
-      timestamp: { $lt: oneDayAgo }
-    });
+    const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+    const escalatedDocs = await db.collection("complaints").aggregate([
+      {
+        $match: {
+          status: { $ne: "Cleared" },
+          $expr: { $lt: [{ $toDate: "$timestamp" }, threeDaysAgo] }
+        }
+      },
+      { $count: "count" }
+    ]).toArray();
+    const escalated = escalatedDocs.length > 0 ? escalatedDocs[0].count : 0;
 
     // Worker Stats
     const totalWorkers = await db.collection("workers").countDocuments();
@@ -28,7 +34,7 @@ export async function GET() {
       { $match: { status: "Cleared", cleared_timestamp: { $ne: null } } },
       {
         $project: {
-          duration: { $subtract: ["$cleared_timestamp", "$timestamp"] }
+          duration: { $subtract: [{ $toDate: "$cleared_timestamp" }, { $toDate: "$timestamp" }] }
         }
       },
       {

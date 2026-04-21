@@ -45,3 +45,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create vehicle" }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const { plate_number, ...updates } = await request.json();
+
+    if (!plate_number) {
+      return NextResponse.json({ error: "Plate number is required for updates" }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db("swach_db");
+
+    const result = await db.collection("vehicles").updateOne(
+      { plate_number },
+      { $set: updates }
+    );
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ status: "SUCCESS" });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "Failed to update vehicle" }, { status: 500 });
+  }
+}

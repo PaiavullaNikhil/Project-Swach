@@ -28,7 +28,9 @@ export default function App() {
     try {
       setLoading(true);
       const response = await axios.get(`${API_URL}/worker/tasks/${id}`, { timeout: 8000 });
-      setTasks(response.data);
+      // Safeguard: Filter out any cleared tasks that might have leaked through
+      const activeTasks = response.data.filter((t: any) => t.status !== 'Cleared');
+      setTasks(activeTasks);
     } catch (err: any) {
       console.log('Worker tasks fetch failed:', err.message);
     } finally {
@@ -82,11 +84,24 @@ export default function App() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-         setLocation(loc);
+         // 1. Initial fast fix
+         const lastLoc = await Location.getLastKnownPositionAsync();
+         if (lastLoc) setLocation(lastLoc);
+
+         // 2. Start watching for movement
+         await Location.watchPositionAsync(
+           {
+             accuracy: Location.Accuracy.Balanced,
+             timeInterval: 5000,
+             distanceInterval: 10,
+           },
+           (newLoc) => {
+             setLocation(newLoc);
+           }
+         );
       }
     } catch (e) {
-      console.log("Location error", e);
+      console.log("Location tracking error", e);
     }
   };
 
@@ -150,7 +165,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         
         {/* Simple Header */}
         <View style={styles.header}>

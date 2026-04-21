@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
-import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2 } from 'lucide-react-native';
+import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2, MessageSquare } from 'lucide-react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import { COLORS, API_URL } from '../constants/theme';
+import ChatModal from '../components/ChatModal';
 
 interface ActiveTaskViewProps {
   task: any;
@@ -21,6 +22,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
   const [routeCoords, setRouteCoords] = useState<{latitude: number; longitude: number}[]>([]);
   const [routeDistance, setRouteDistance] = useState<number | null>(null); // in meters
   const [routeDuration, setRouteDuration] = useState<number | null>(null); // in seconds
+  const [isChatVisible, setIsChatVisible] = useState(false);
   const lastRouteFetchRef = React.useRef<{lat: number; lon: number} | null>(null);
   const mapRef = React.useRef<MapView | null>(null);
 
@@ -190,6 +192,12 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
   const isAssignedToMe = task.worker_id === workerHash;
   const isAssignedToOther = task.worker_id && task.worker_id !== workerHash;
 
+  // Task is escalated if it was reported more than 72 hours ago
+  const isEscalated = () => {
+    const ageHours = (new Date().getTime() - new Date(task.timestamp).getTime()) / (1000 * 60 * 60);
+    return ageHours >= 72;
+  };
+
   return (
     <View style={styles.container}>
       {task.worker_status === 'On the way' && userLocation ? (
@@ -261,9 +269,18 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
         <ScrollView>
           <Image source={{ uri: task.photo_url }} style={styles.heroImage} />
           
+          {isEscalated() && (
+            <TouchableOpacity 
+              style={[styles.floatingChatBtn, { top: 220 }]} 
+              onPress={() => setIsChatVisible(true)}
+            >
+              <MessageSquare size={24} color="#fff" />
+              <View style={styles.unreadDot} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.content}>
             <Text style={styles.title}>{task.ward}</Text>
-            <Text style={styles.subtitle}>{task.mla || 'Local Area'}</Text>
             
             <View style={styles.statsCard}>
                <View style={styles.statLine}><MapPin size={16} color={COLORS.textMuted}/><Text style={styles.statText}>Lat: {task.location?.coordinates[1].toFixed(5)}, Lon: {task.location?.coordinates[0].toFixed(5)}</Text></View>
@@ -313,6 +330,14 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
       <TouchableOpacity style={styles.backBtn} onPress={onGoBack}>
           <Text style={styles.backBtnText}>Close</Text>
       </TouchableOpacity>
+
+      <ChatModal 
+        isVisible={isChatVisible}
+        onClose={() => setIsChatVisible(false)}
+        complaintId={task._id}
+        workerId={workerHash}
+        workerName={task.worker_name || 'Worker'}
+      />
     </View>
   );
 }
@@ -334,7 +359,7 @@ const styles = StyleSheet.create({
   btnOutline: { padding: 16, borderRadius: 12, borderWidth: 2, borderColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   btnOutlineText: { color: COLORS.primary, fontSize: 16, fontWeight: '700', marginLeft: 8 },
   btnActive: { backgroundColor: COLORS.primary },
-  backBtn: { position: 'absolute', top: 56, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  backBtn: { position: 'absolute', top: 20, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
   backBtnText: { color: '#fff', fontWeight: '800' },
   
   // Custom Map Markers & Dashboard
@@ -353,4 +378,34 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 
   },
   etaText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  floatingChatBtn: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 3,
+    borderColor: '#fff',
+    zIndex: 10,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: COLORS.error,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
 });

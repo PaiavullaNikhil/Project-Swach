@@ -18,17 +18,8 @@ export default function TasksView({ tasks, loading, onRefresh, onSelectTask }: T
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.ward}>{item.ward || 'Unknown Ward'}</Text>
-          <View style={[styles.badge, { backgroundColor: item.worker_status ? COLORS.accent + '20' : COLORS.primary + '20' }]}>
-            <Text style={[styles.badgeText, { color: item.worker_status ? COLORS.accent : COLORS.primary }]}>
-                {item.worker_status || 'Open'}
-            </Text>
-          </View>
         </View>
 
-        <View style={styles.row}>
-          <MapPin size={14} color={COLORS.textMuted} />
-          <Text style={styles.metaTitle}>{item.mla || 'Local Area'}</Text>
-        </View>
 
         <View style={styles.footer}>
           <View style={styles.row}>
@@ -40,6 +31,14 @@ export default function TasksView({ tasks, loading, onRefresh, onSelectTask }: T
           <View style={styles.priorityBox}>
               <Text style={styles.priorityBoxText}>{item.upvotes} Upvotes</Text>
           </View>
+        </View>
+
+        {/* Action Label */}
+        <View style={[styles.actionLabel, { backgroundColor: item.worker_id ? COLORS.success + '15' : COLORS.primary + '15' }]}>
+            <ArrowRight size={14} color={item.worker_id ? COLORS.success : COLORS.primary} />
+            <Text style={[styles.actionLabelText, { color: item.worker_id ? COLORS.success : COLORS.primary }]}>
+                {item.worker_id ? 'TAP TO NAVIGATE & CLEAN' : 'CLAIM & START CLEANING'}
+            </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -85,6 +84,11 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border },
   priorityBox: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   priorityBoxText: { color: COLORS.error, fontSize: 12, fontWeight: '700' },
+  actionLabel: { 
+    marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, 
+    flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' 
+  },
+  actionLabelText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   empty: { padding: 40, alignItems: 'center' },
   emptyText: { color: COLORS.textMuted, fontSize: 16 }
 });

@@ -30,10 +30,11 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
 
   const getWardColor = (wardName: string) => {
     const activeCount = wardHealth[wardName] || 0;
-    if (activeCount >= 5) return 'rgba(239, 68, 68, 0.6)';
-    if (activeCount >= 2) return 'rgba(245, 158, 11, 0.6)';
-    if (activeCount >= 1) return 'rgba(16, 185, 129, 0.5)';
-    return 'rgba(16, 185, 129, 0.1)';
+    if (activeCount >= 5) return 'rgba(239, 68, 68, 0.7)'; // Red
+    if (activeCount >= 3) return 'rgba(249, 115, 22, 0.6)'; // Orange
+    if (activeCount >= 2) return 'rgba(245, 158, 11, 0.5)'; // Yellow
+    if (activeCount >= 1) return 'rgba(16, 185, 129, 0.4)'; // Light Green
+    return 'rgba(16, 185, 129, 0.1)'; // Transparent Green
   };
 
   const geoData = (wardData as any).features ? (wardData as any) : ((wardData as any).default || {});
@@ -60,7 +61,7 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
       >
         <Geojson
           geojson={geoData}
-          strokeColor={COLORS.primary + '40'}
+          strokeColor={COLORS.primary + '30'}
           fillColor="rgba(16, 185, 129, 0.05)"
           strokeWidth={0.5}
         />
@@ -79,48 +80,30 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
                   type: "FeatureCollection",
                   features: [feature]
                 }}
-                strokeColor={COLORS.error}
+                strokeColor={COLORS.error + '40'}
                 fillColor={getWardColor(wardName)}
-                strokeWidth={2}
+                strokeWidth={1}
               />
             );
           })}
-
-        {complaints.map((complaint: any, idx: number) => {
-          if (!complaint.location?.coordinates) return null;
-          return (
-            <Marker
-              key={complaint._id || `marker-${idx}`}
-              coordinate={{
-                latitude: complaint.location.coordinates[1],
-                longitude: complaint.location.coordinates[0],
-              }}
-              pinColor={complaint.status === 'Reported' ? COLORS.error : COLORS.primary}
-              onCalloutPress={() => onSelectComplaint(complaint)}
-            >
-              <Callout>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutTitle}>{complaint.ward || 'Reported Issue'}</Text>
-                  <Text style={styles.calloutText}>Status: {complaint.status}</Text>
-                </View>
-              </Callout>
-            </Marker>
-          );
-        })}
       </MapView>
 
       <View style={styles.legend}>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: 'rgba(239, 68, 68, 0.8)' }]} />
-          <Text style={styles.legendText}>Hazard (5+)</Text>
+          <Text style={styles.legendText}>Critical Volume (5+)</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: 'rgba(249, 115, 22, 0.8)' }]} />
+          <Text style={styles.legendText}>High Activity (3+)</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: 'rgba(245, 158, 11, 0.8)' }]} />
-          <Text style={styles.legendText}>Warning (2+)</Text>
+          <Text style={styles.legendText}>Moderate (1-2)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, { backgroundColor: 'rgba(16, 185, 129, 0.6)' }]} />
-          <Text style={styles.legendText}>Active (1)</Text>
+          <View style={[styles.dot, { backgroundColor: 'rgba(16, 185, 129, 0.3)' }]} />
+          <Text style={styles.legendText}>Stable (0)</Text>
         </View>
       </View>
 

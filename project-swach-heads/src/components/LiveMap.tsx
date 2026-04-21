@@ -1,9 +1,9 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { io } from "socket.io-client";
 
 // Fix for default marker icons in Leaflet with Next.js
@@ -48,8 +48,45 @@ export default function LiveMap() {
   const [mounted, setMounted] = useState(false);
   const [pins, setPins] = useState<ComplaintPin[]>([]);
   const [workers, setWorkers] = useState<WorkerLocation[]>([]);
+  const [wardGeoData, setWardGeoData] = useState<any>(null);
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
+  const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [, setSocket] = useState<any>(null);
+
+  // Stats aggregation by ward
+  const wardStats = useMemo(() => {
+    const stats: Record<string, { active: number, total: number, complaints: ComplaintPin[] }> = {};
+    pins.forEach(pin => {
+      if (!stats[pin.ward]) {
+        stats[pin.ward] = { active: 0, total: 0, complaints: [] };
+      }
+      stats[pin.ward].total++;
+      if (pin.status === 'Reported' || pin.status === 'Assigned') {
+        stats[pin.ward].active++;
+      }
+      stats[pin.ward].complaints.push(pin);
+    });
+    return stats;
+  }, [pins]);
+
+  const getColor = (activeCount: number) => {
+    if (activeCount === 0) return "#22c55e"; // Green
+    if (activeCount < 3) return "#eab308";  // Yellow/Amber
+    if (activeCount < 6) return "#f97316";  // Orange
+    return "#ef4444"; // Red
+  };
+
+  const wardStyle = (feature: any) => {
+    const wardName = `${feature.properties.name_en} (Ward ${feature.properties.id})`;
+    const active = wardStats[wardName]?.active || 0;
+    return {
+      fillColor: getColor(active),
+      weight: 1.5,
+      opacity: 0.8,
+      color: '#000000',
+      fillOpacity: 0.6
+    };
+  };
 
   const fetchPins = () => {
     fetch("/api/complaints")
@@ -92,6 +129,12 @@ export default function LiveMap() {
     setMounted(true);
     fetchPins();
     fetchWorkers();
+
+    // Fetch GeoJSON ward data
+    fetch("/wards.json")
+      .then(res => res.json())
+      .then(data => setWardGeoData(data))
+      .catch(err => console.error("Error loading ward GeoJSON:", err));
 
     // Socket setup - the API_URL should be the backend URL, for now let's use the current origin's port change or similar
     // Assuming backend is at :8001 as seen in main.py
@@ -137,59 +180,62 @@ export default function LiveMap() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {pins.map((pin) => (
-          <Marker 
-            key={pin.id} 
-            position={[pin.lat, pin.lng]} 
-            icon={trashIcon}
-          >
-            <Popup className="dark-popup">
-              <div className="p-2 bg-zinc-900 text-white rounded-lg min-w-[150px]">
-                <h4 className="font-bold text-sm mb-1">{pin.ward}</h4>
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] text-muted-foreground">Status:</span>
-                    <span className={`text-[10px] font-bold ${pin.status === 'Reported' ? 'text-blue-400' : 'text-amber-400'}`}>{pin.status}</span>
-                </div>
-                {pin.status === 'Reported' && (
-                    <button 
-                        onClick={() => setSelectedComplaintId(pin.id)}
-                        className="w-full bg-primary py-2 rounded-lg text-[10px] font-bold hover:bg-primary/90 transition-all uppercase tracking-wider"
-                    >
-                        ASSIGN WORKER
-                    </button>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {workers.map((worker) => (
-            <Marker
-                key={worker.worker_id}
-                position={[worker.lat, worker.lon]}
-                icon={truckIcon}
-            >
-                <Popup className="dark-popup">
-                    <div className="p-2 bg-zinc-900 text-white rounded-lg min-w-[100px]">
-                        <h4 className="font-bold text-sm mb-1">{worker.name || "Worker"}</h4>
-                        <p className="text-[10px] text-muted-foreground">ID: {worker.worker_id}</p>
+        {wardGeoData && (
+          <GeoJSON 
+            data={wardGeoData} 
+            style={wardStyle}
+            onEachFeature={(feature, layer) => {
+              const wardName = `${feature.properties.name_en} (Ward ${feature.properties.id})`;
+              const stats = wardStats[wardName] || { active: 0, total: 0, complaints: [] };
+              
+              layer.bindPopup(`
+                <div class="p-3 bg-zinc-900 text-white rounded-lg min-w-[200px]">
+                  <h4 class="font-bold text-base mb-1 border-b border-white/10 pb-1">${wardName}</h4>
+                  <div class="space-y-2 mt-2">
+                    <div class="flex justify-between text-xs">
+                      <span>Active Complaints:</span>
+                      <span class="font-bold text-red-400">${stats.active}</span>
                     </div>
-                </Popup>
-            </Marker>
-        ))}
+                    <div class="flex justify-between text-xs">
+                      <span>Total Issues:</span>
+                      <span class="font-bold text-blue-400">${stats.total}</span>
+                    </div>
+                  </div>
+                  <div class="mt-4 pt-2 border-t border-white/10 text-[10px] text-muted-foreground italic">
+                    Click "Priority Feed" in dashboard to manage individual assignments.
+                  </div>
+                </div>
+              `, { className: 'dark-popup' });
+
+              layer.on({
+                mouseover: (e) => {
+                  const l = e.target;
+                  l.setStyle({ fillOpacity: 0.8, weight: 2 });
+                },
+                mouseout: (e) => {
+                  const l = e.target;
+                  l.setStyle({ fillOpacity: 0.6, weight: 1 });
+                }
+              });
+            }}
+          />
+        )}
       </MapContainer>
 
       {/* Map Legend Overlay */}
       <div className="absolute bottom-6 right-6 glass p-4 rounded-xl z-[1000] border border-white/10 space-y-2">
-        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Map Legend</h5>
+        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Ward Health</h5>
         <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-blue-500" /> Reported
+          <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> High Load (6+)
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-amber-500" /> Assigned
+          <span className="w-2 h-2 rounded-full bg-[#f97316]" /> Warning (3-5)
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-green-500" /> Resolved
+          <span className="w-2 h-2 rounded-full bg-[#eab308]" /> Low Load (1-2)
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> Healthy (0)
         </div>
       </div>
 

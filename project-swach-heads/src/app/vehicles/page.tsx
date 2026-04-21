@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Truck, Plus, CheckCircle2, AlertCircle, MapPin, Settings2 } from "lucide-react";
+import { Truck, Plus, CheckCircle2, AlertCircle, MapPin, Settings2, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BANGALORE_WARDS } from "@/constants/wards";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface Vehicle {
   _id: string;
@@ -17,6 +19,7 @@ export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState({ plate_number: "", vehicle_type: "Mini Truck", ward: "" });
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,24 +43,36 @@ export default function VehiclesPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const method = editingVehicle ? "PUT" : "POST";
       const res = await fetch("/api/vehicles", {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
       if (res.ok) {
         setShowModal(false);
+        setEditingVehicle(null);
         setFormData({ plate_number: "", vehicle_type: "Mini Truck", ward: "" });
         fetchVehicles();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to create vehicle");
+        alert(err.error || `Failed to ${editingVehicle ? "update" : "create"} vehicle`);
       }
     } catch (err) {
       alert("Network error");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEdit = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
+    setFormData({
+      plate_number: vehicle.plate_number,
+      vehicle_type: vehicle.vehicle_type,
+      ward: vehicle.ward
+    });
+    setShowModal(true);
   };
 
   return (
@@ -129,8 +144,11 @@ export default function VehiclesPage() {
                  <button className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-xs font-bold transition-all border border-white/5">
                     VIEW LOGS
                  </button>
-                 <button className="p-2.5 bg-white/5 hover:bg-primary/10 hover:text-primary rounded-xl transition-all border border-white/5">
-                    <Settings2 className="w-4 h-4" />
+                 <button 
+                    onClick={() => handleEdit(vehicle)}
+                    className="p-2.5 bg-white/5 hover:bg-primary/10 hover:text-primary rounded-xl transition-all border border-white/5"
+                  >
+                    <Edit2 className="w-4 h-4" />
                  </button>
               </div>
             </motion.div>
@@ -160,16 +178,15 @@ export default function VehiclesPage() {
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Operational Ward</label>
-                  <input 
-                    required
-                    value={formData.ward}
-                    onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
-                    placeholder="e.g. HSR Layout"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
-                  />
-                </div>
+                 <div>
+                   <SearchableSelect 
+                     label="Operational Ward"
+                     options={BANGALORE_WARDS}
+                     value={formData.ward}
+                     onChange={(val) => setFormData({ ...formData, ward: val })}
+                     placeholder="Select ward..."
+                   />
+                 </div>
                 <div>
                   <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Vehicle Type</label>
                   <select 
@@ -196,7 +213,7 @@ export default function VehiclesPage() {
                     disabled={submitting}
                     className="flex-1 bg-primary text-white px-4 py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
                   >
-                    {submitting ? "REGISTERING..." : "CONFIRM"}
+                    {submitting ? "PROCESSING..." : editingVehicle ? "SAVE CHANGES" : "CONFIRM"}
                   </button>
                 </div>
               </form>

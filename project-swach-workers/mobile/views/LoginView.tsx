@@ -27,9 +27,9 @@ export default function LoginView({ onLogin }: LoginViewProps) {
       setWorker(response.data);
       
       // Fetch vehicles next for the specific ward
-      console.log(`[LOG] Fetching vehicles for ward: ${response.data.ward} from ${API_URL}/worker/vehicles`);
+      console.log(`[LOG] Fetching isolated vehicles for worker: ${cleanId}`);
       const vResponse = await axios.get(`${API_URL}/worker/vehicles`, { 
-          params: { ward: response.data.ward },
+          params: { worker_id: cleanId, ward: response.data.ward },
           timeout: 10000 
       });
       const allVehicles = vResponse.data;
