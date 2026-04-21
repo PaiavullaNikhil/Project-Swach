@@ -103,6 +103,7 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
         <View style={styles.mapCard}>
             <MapView
                 style={styles.map}
+                showsUserLocation={true}
                 initialRegion={{
                    latitude: complaint.location.coordinates[1],
                    longitude: complaint.location.coordinates[0],
