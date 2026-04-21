@@ -2,11 +2,13 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
+from database import settings
+
 async def migrate():
     # Connection URL (Corrected from .env)
-    uri = "mongodb+srv://nikhil20th65_db_user:JEg9h6u8stT4HBzK@project-swach.xcmgdpw.mongodb.net/"
+    uri = settings.mongodb_uri
     client = AsyncIOMotorClient(uri)
-    db = client.swach_db
+    db = client[settings.database_name]
     
     print("Starting migration of worker statistics...")
     
