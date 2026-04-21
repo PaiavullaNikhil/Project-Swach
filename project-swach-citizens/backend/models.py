@@ -40,6 +40,7 @@ class Complaint(Document):
     constituency: Optional[str] = None
     mla: Optional[str] = None
     reporter_hash: str
+    category: str = "General"
     points_awarded: bool = False
     
     # Worker Section

@@ -2,6 +2,7 @@ import os
 import uuid
 import math
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -12,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from database import init_db
-from models import Complaint, GeoJSONPoint, Worker, Vehicle
+from models import Complaint, GeoJSONPoint, Worker, Vehicle, ChatMessage
 from utils.geocoding import reverse_geocode
 from utils.ai_vision import check_waste_report
 from utils.cloudinary_utils import upload_image
@@ -151,6 +152,28 @@ async def connect(sid, environ):
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
 
+@sio.on("location_update")
+async def handle_location_update(sid, data):
+    worker_id = data.get("worker_id")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if not worker_id or lat is None or lon is None:
+        return
+
+    # Update Worker profile for Live Map
+    await Worker.find({
+        "worker_id": {"$regex": f"^{worker_id}$", "$options": "i"}
+    }).update({"$set": {"current_location": GeoJSONPoint(coordinates=[lon, lat])}})
+
+    # Update active task location
+    await Complaint.find({
+        "worker_id": {"$regex": f"^{worker_id}$", "$options": "i"},
+        "worker_status": "On the way"
+    }).update({"$set": {"worker_location": GeoJSONPoint(coordinates=[lon, lat])}})
+
+    # Broadcast to all (Admins)
+    await sio.emit("location_update", {"worker_id": worker_id.upper(), "lat": lat, "lon": lon})
+
 @app.get("/worker/login/{worker_id}")
 async def worker_login(worker_id: str):
     # Case-insensitive lookup using regex
@@ -162,32 +185,91 @@ async def worker_login(worker_id: str):
     return worker
 
 @app.get("/worker/vehicles")
-async def get_vehicles(ward: Optional[str] = None):
-    query = {"status": "Available"}
-    if ward:
-        query["ward"] = ward
-    return await Vehicle.find(query).to_list()
+async def get_vehicles(worker_id: Optional[str] = None, ward: Optional[str] = None):
+    print(f"[AUTH] Vehicle Fetch Request -> worker_id: {worker_id}, ward: {ward}")
+    
+    # 1. Determine the STRICT ward for this request
+    strict_ward = None
+    
+    if worker_id:
+        worker = await Worker.find_one({"worker_id": {"$regex": f"^{worker_id}$", "$options": "i"}})
+        if worker:
+            strict_ward = worker.ward
+            print(f"[AUTH] ID Verified. Worker {worker_id} locked to ward: '{strict_ward}'")
+        else:
+            print(f"[AUTH] ID Verification FAILED for {worker_id}")
+    elif ward:
+        strict_ward = ward
+        print(f"[AUTH] Falling back to provided ward param: '{strict_ward}'")
+
+    if not strict_ward:
+        print("[AUTH] REJECTED: No ward context available. Returning empty list.")
+        return []
+
+    # 2. Execute STRICT query
+    query = {
+        "status": "Available",
+        "ward": {"$regex": f"^{re.escape(strict_ward)}$", "$options": "i"}
+    }
+    
+    print(f"[QUERY] Executing Vehicle Isolation Query: {query}")
+    results = await Vehicle.find(query).to_list()
+    print(f"[QUERY] Returned {len(results)} vehicles for ward '{strict_ward}'")
+    
+    return results
 
 @app.post("/worker/location/{worker_id}")
 async def update_location(worker_id: str, lat: float = Form(...), lon: float = Form(...)):
-    # Update all active tasks for this worker with their current location
+    # 1. Update Worker profile for Live Map
+    await Worker.find({
+        "worker_id": {"$regex": f"^{worker_id}$", "$options": "i"}
+    }).update({"$set": {"current_location": GeoJSONPoint(coordinates=[lon, lat])}})
+
+    # 2. Update active tasks for this worker
     await Complaint.find({
-        "worker_id": worker_id, 
+        "worker_id": {"$regex": f"^{worker_id}$", "$options": "i"},
         "worker_status": "On the way"
     }).update({"$set": {"worker_location": GeoJSONPoint(coordinates=[lon, lat])}})
     
-    # Broadcast location to all clients
-    await sio.emit("location_update", {"worker_id": worker_id, "lat": lat, "lon": lon})
+    # 3. Broadcast location to all clients (Admins)
+    await sio.emit("location_update", {"worker_id": worker_id.upper(), "lat": lat, "lon": lon})
     
     return {"status": "SUCCESS"}
 
 @app.get("/worker/tasks/{worker_id}", response_model=List[Complaint])
 async def get_worker_tasks(worker_id: str):
-    # Only return tasks explicitly assigned to THIS worker.
-    return await Complaint.find({
-        "worker_id": worker_id,
-        "status": {"$in": ["Assigned", "On the way", "Work in progress", "Cleared"]} # Show all recent assigned stuff
-    }).sort("-timestamp").to_list()
+    print(f"[AUTH] Task Feed Request for: {worker_id}")
+    
+    # 1. Authenticate worker ward
+    worker = await Worker.find_one({"worker_id": {"$regex": f"^{worker_id}$", "$options": "i"}})
+    if not worker or not worker.ward:
+        print(f"[AUTH] BLOCKING: Worker {worker_id} not found or has no ward.")
+        return []
+
+    worker_ward = worker.ward
+    print(f"[AUTH] LOCKDOWN: Staff {worker_id} restricted to ward '{worker_ward}'")
+    
+    # 2. Build isolated query
+    # Logic: Show my assigned tasks OR Reported tasks in MY ward
+    query = {
+        "status": {"$ne": "Cleared"},
+        "$or": [
+            # My explicitly assigned tasks (fallback for special assignments)
+            {"worker_id": {"$regex": f"^{worker_id}$", "$options": "i"}},
+            # Unassigned tasks strictly in MY ward
+            {
+                "worker_id": {"$in": [None, ""]}, 
+                "status": "Reported", 
+                "ward": {"$regex": f"^{re.escape(worker_ward)}$", "$options": "i"}
+            }
+        ]
+    }
+    
+    print(f"[QUERY] Executing Isolated Task Query: {query}")
+    tasks = await Complaint.find(query).sort("-timestamp").to_list()
+    print(f"[QUERY] Feed Complete: Found {len(tasks)} tasks.")
+    
+    return tasks
 
 @app.post("/worker/accept/{complaint_id}")
 async def worker_accept(
@@ -278,6 +360,13 @@ async def worker_complete(
     complaint.cleared_timestamp = datetime.utcnow()
     await complaint.save()
     
+    # Increment worker task count
+    if complaint.worker_id:
+        try:
+            await Worker.find_one(Worker.worker_id == complaint.worker_id).update({"$inc": {"tasks_completed": 1}})
+        except Exception as e:
+            print(f"DEBUG: Failed to increment worker task count: {e}")
+    
     # Broadcast completion
     await sio.emit("status_update", {
         "complaint_id": complaint_id,
@@ -286,6 +375,55 @@ async def worker_complete(
     })
     
     return {"status": "SUCCESS", "distance_m": dist}
+
+# --- Chat Endpoints & Sockets ---
+
+@app.get("/chat/{complaint_id}", response_model=List[ChatMessage])
+async def get_chat_history(complaint_id: str):
+    return await ChatMessage.find(ChatMessage.complaint_id == complaint_id).sort("timestamp").to_list()
+
+@app.delete("/chat/{complaint_id}")
+async def clear_chat_history(complaint_id: str):
+    await ChatMessage.find(ChatMessage.complaint_id == complaint_id).delete()
+    return {"status": "SUCCESS"}
+
+@app.post("/chat/{complaint_id}")
+async def post_chat_message(complaint_id: str, msg: ChatMessage):
+    print(f"DEBUG: Received chat message for {complaint_id} from {msg.sender_name}")
+    msg.complaint_id = complaint_id
+    try:
+        await msg.insert()
+        print(f"DEBUG: Message saved to DB: {msg.id}")
+    except Exception as e:
+        print(f"DEBUG: Failed to save message: {e}")
+        raise HTTPException(status_code=500, detail="Database save failed")
+
+    # Broadcast via socket
+    payload = {
+        "complaint_id": complaint_id,
+        "sender_id": msg.sender_id,
+        "sender_name": msg.sender_name,
+        "sender_role": msg.sender_role,
+        "message": msg.message,
+        "timestamp": msg.timestamp.isoformat()
+    }
+    await sio.emit("new_chat_message", payload, room=f"chat_{complaint_id}")
+    print(f"DEBUG: Broadcasted message to room chat_{complaint_id}")
+    return {"status": "SUCCESS"}
+
+@sio.on("join_chat")
+async def handle_join_chat(sid, data):
+    complaint_id = data.get("complaint_id")
+    if complaint_id:
+        await sio.enter_room(sid, f"chat_{complaint_id}")
+        print(f"Client {sid} joined chat room: chat_{complaint_id}")
+
+@sio.on("leave_chat")
+async def handle_leave_chat(sid, data):
+    complaint_id = data.get("complaint_id")
+    if complaint_id:
+        await sio.leave_room(sid, f"chat_{complaint_id}")
+        print(f"Client {sid} left chat room: chat_{complaint_id}")
 
 if __name__ == "__main__":
     import uvicorn

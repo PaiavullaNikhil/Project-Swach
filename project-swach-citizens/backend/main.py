@@ -40,7 +40,8 @@ async def report_waste(
     lat: float = Form(...),
     lon: float = Form(...),
     photo: UploadFile = File(...),
-    user_hash: Optional[str] = Form(None)
+    user_hash: Optional[str] = Form(None),
+    category: str = Form("General")
 ):
     """
     Step 1: Report Waste
@@ -96,7 +97,8 @@ async def report_waste(
         reporter_hash=reporter_hash,
         ward=geo_details["ward"],
         constituency=geo_details["constituency"],
-        mla=geo_details["mla"]
+        mla=geo_details["mla"],
+        category=ai_result.get("category", "General")
     )
     await new_complaint.insert()
 
@@ -113,8 +115,15 @@ async def report_waste(
 async def get_feed(limit: int = 20, offset: int = 0):
     """
     Step 3: Feed View
+    Only shows active tasks OR tasks cleared within the last 24 hours.
     """
-    return await Complaint.find_all().sort("-timestamp").skip(offset).limit(limit).to_list()
+    one_day_ago = datetime.utcnow() - timedelta(hours=24)
+    return await Complaint.find({
+        "$or": [
+            {"status": {"$ne": "Cleared"}},
+            {"status": "Cleared", "cleared_timestamp": {"$gte": one_day_ago}}
+        ]
+    }).sort("-timestamp").skip(offset).limit(limit).to_list()
 
 @app.post("/upvote/{complaint_id}")
 async def upvote(complaint_id: str, user_hash: Optional[str] = Form(None)):

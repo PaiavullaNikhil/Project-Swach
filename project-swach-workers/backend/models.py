@@ -57,8 +57,12 @@ class Worker(Document):
     name: str
     worker_id: str
     phone: str
+    ward: Optional[str] = None
     assigned_vehicle_id: Optional[str] = None
     status: str = "Active"
+    tasks_completed: int = 0
+    rating: float = 5.0
+    current_location: Optional[GeoJSONPoint] = None
     
     class Settings:
         name = "workers"
@@ -72,3 +76,15 @@ class Vehicle(Document):
 
     class Settings:
         name = "vehicles"
+
+
+class ChatMessage(Document):
+    complaint_id: Optional[str] = None
+    sender_id: str
+    sender_name: str
+    sender_role: str # Admin or Worker
+    message: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "chat_messages"

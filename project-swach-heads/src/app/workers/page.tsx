@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, UserCheck, UserPlus, Star, MapPin, Clock } from "lucide-react";
+import { Users, UserCheck, UserPlus, Star, MapPin, Clock, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BANGALORE_WARDS } from "@/constants/wards";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 interface Worker {
   name: string;
@@ -19,6 +21,7 @@ export default function WorkersPage() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [formData, setFormData] = useState({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
   const [submitting, setSubmitting] = useState(false);
 
@@ -58,24 +61,38 @@ export default function WorkersPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const method = editingWorker ? "PUT" : "POST";
       const res = await fetch("/api/workers", {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
       if (res.ok) {
         setShowModal(false);
+        setEditingWorker(null);
         setFormData({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
         fetchWorkers();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to create worker");
+        alert(err.error || `Failed to ${editingWorker ? 'update' : 'create'} worker`);
       }
     } catch (err) {
       alert("Network error");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEdit = (worker: Worker) => {
+    setEditingWorker(worker);
+    setFormData({
+      name: worker.name,
+      worker_id: worker.worker_id,
+      phone: (worker as any).phone || "", // Assume phone might be missing
+      ward: worker.ward,
+      assigned_vehicle_id: (worker as any).assigned_vehicle_id || ""
+    });
+    setShowModal(true);
   };
 
   return (
@@ -126,16 +143,15 @@ export default function WorkersPage() {
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
                       />
                    </div>
-                   <div className="flex-1">
-                      <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Ward</label>
-                      <input 
-                        required
-                        value={formData.ward}
-                        onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
-                        placeholder="HSR Layout"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
-                      />
-                   </div>
+                    <div className="flex-1">
+                       <SearchableSelect 
+                         label="Operational Ward"
+                         options={BANGALORE_WARDS}
+                         value={formData.ward}
+                         onChange={(val) => setFormData({ ...formData, ward: val })}
+                         placeholder="Start typing ward name..."
+                       />
+                    </div>
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-muted-foreground block mb-2 px-1">Phone Number</label>
@@ -167,6 +183,7 @@ export default function WorkersPage() {
                     type="button"
                     onClick={() => {
                         setShowModal(false);
+                        setEditingWorker(null);
                         setFormData({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
                     }}
                     className="flex-1 px-4 py-3 rounded-xl font-bold border border-white/10 hover:bg-white/5 transition-all text-sm"
@@ -178,7 +195,7 @@ export default function WorkersPage() {
                     disabled={submitting}
                     className="flex-1 bg-primary text-white px-4 py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
                   >
-                    {submitting ? "REGISTERING..." : "CONFIRM"}
+                    {submitting ? "PROCESSING..." : editingWorker ? "SAVE CHANGES" : "CONFIRM"}
                   </button>
                 </div>
               </form>
@@ -269,8 +286,14 @@ export default function WorkersPage() {
               </div>
 
               <div className="mt-6 flex gap-2">
-                <button className="flex-1 bg-white/5 hover:bg-white/10 py-2 rounded-xl text-xs font-bold transition-all">PERFORMANCE</button>
-                <button className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 py-2 rounded-xl text-xs font-bold transition-all">ASSIGN TASK</button>
+                <button 
+                  onClick={() => handleEdit(worker)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-xs font-bold transition-all border border-white/5 flex items-center justify-center gap-2"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  EDIT PROFILE
+                </button>
+                <button className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 py-2.5 rounded-xl text-xs font-bold transition-all">ASSIGN TASK</button>
               </div>
             </motion.div>
           ))}

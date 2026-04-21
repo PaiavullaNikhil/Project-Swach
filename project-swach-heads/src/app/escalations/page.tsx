@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertCircle, Send, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { io, Socket } from "socket.io-client";
+import { AssignmentModal } from "@/components/AssignmentModal";
 
 interface ChatMessage {
   _id?: string;
+  sender_id?: string;
   sender_name: string;
   sender_role: "Admin" | "Worker";
   message: string;
@@ -18,6 +21,7 @@ interface Escalation {
   delay: string;
   photo_url: string;
   status: string;
+  worker_id: string;
   assigned_worker: string;
 }
 
@@ -28,48 +32,87 @@ interface apiComplaint {
   status: string;
   timestamp: string;
   worker_id?: string;
+  worker_name?: string;
 }
+
+const WORKER_API_URL = "http://localhost:8001";
 
 export default function EscalationsPage() {
   const [selected, setSelected] = useState<Escalation | null>(null);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Fetch critical complaints (older than 24h)
-    fetch("/api/complaints?status=Reported")
+  const fetchEscalations = () => {
+    fetch("/api/complaints")
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           const escData = data.filter((c: apiComplaint) => {
             const ageHours = (Date.now() - new Date(c.timestamp).getTime()) / (1000 * 60 * 60);
-            return ageHours > 24;
+            return ageHours > 72 && c.status !== "Cleared";
           }).map((c: apiComplaint) => ({
             id: c._id,
             ward: c.ward || "Unknown",
-            delay: "24h+",
+            delay: "72h+",
             photo_url: c.photo_url,
             status: c.status,
-            assigned_worker: c.worker_id || "Unassigned"
+            assigned_worker: c.worker_name || c.worker_id || "Unassigned",
+            worker_id: c.worker_id || ""
           }));
           setEscalations(escData);
-          if (escData.length > 0) setSelected(escData[0]);
+          if (escData.length > 0 && !selected) setSelected(escData[0]);
         }
       })
       .catch(err => console.error("Error fetching escalations:", err));
+  };
+
+  useEffect(() => {
+    fetchEscalations();
+    
+    // Initialize Socket
+    socketRef.current = io(WORKER_API_URL, {
+      path: "/ws/socket.io"
+    });
+
+    socketRef.current.on("new_chat_message", (msg: ChatMessage) => {
+      setMessages(prev => {
+        // Avoid duplicate messages if any
+        if (prev.some(m => m.timestamp === msg.timestamp && m.message === msg.message)) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
   }, []);
 
   useEffect(() => {
     if (selected) {
-      fetch(`/api/chat/${selected.id}`)
+      // Join Room
+      socketRef.current?.emit("join_chat", { complaint_id: selected.id });
+
+      // Fetch History
+      fetch(`${WORKER_API_URL}/chat/${selected.id}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setMessages(data);
         })
         .catch(err => console.error("Error fetching messages:", err));
+        
+      return () => {
+        socketRef.current?.emit("leave_chat", { complaint_id: selected.id });
+      };
     }
   }, [selected]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = () => {
     if (!input.trim() || !selected) return;
@@ -80,19 +123,31 @@ export default function EscalationsPage() {
       message: input,
     };
     
-    fetch(`/api/chat/${selected.id}`, {
+    fetch(`${WORKER_API_URL}/chat/${selected.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(msg)
     }).then(() => {
-      const displayMsg: ChatMessage = {
-        ...msg,
-        sender_role: "Admin",
-        timestamp: new Date().toISOString()
-      };
-      setMessages([...messages, displayMsg]);
       setInput("");
     });
+  };
+
+  const handleAssignmentSuccess = () => {
+    // Refresh the sidebar list
+    fetchEscalations();
+    
+    // Close the modal
+    setIsAssignmentModalOpen(false);
+    
+    // Explicitly update the selected item's assigned_worker to "Updating..." 
+    // It will be fully updated once fetchEscalations finishes, but this gives immediate feedback
+    if (selected) {
+      setSelected(prev => prev ? { ...prev, assigned_worker: "Updating..." } : null);
+      setMessages([]); // Clear chat history from UI
+    }
+    
+    // To be even better, we could reload the single selected complaint details here
+    setTimeout(fetchEscalations, 500); // Small delay to ensure DB secondary consistency if on Atlas
   };
 
   return (
@@ -124,7 +179,7 @@ export default function EscalationsPage() {
                   <img src={esc.photo_url} className="w-12 h-12 rounded-lg object-cover" alt="Waste" />
                   <div>
                     <h4 className="font-bold text-sm">{esc.ward}</h4>
-                    <p className="text-xs text-muted-foreground">Assigned: {esc.assigned_worker}</p>
+                    <p className="text-xs text-muted-foreground truncate w-40">With: {esc.assigned_worker}</p>
                   </div>
                 </div>
               </div>
@@ -137,34 +192,42 @@ export default function EscalationsPage() {
       <div className="flex-1 glass border border-white/5 rounded-3xl flex flex-col overflow-hidden">
         {selected ? (
           <>
-            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5 relative z-10">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                   <MessageSquare className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold">{selected.ward} — {selected.id.slice(-6)}</h3>
-                  <p className="text-xs text-muted-foreground">Chatting with {selected.assigned_worker}</p>
+                  <p className="text-xs text-muted-foreground">Communicating with {selected.assigned_worker}</p>
                 </div>
               </div>
-              <button className="bg-destructive/10 text-destructive hover:bg-destructive/20 px-4 py-2 rounded-xl text-xs font-bold transition-all">
+              <button 
+                onClick={() => setIsAssignmentModalOpen(true)}
+                className="relative z-50 cursor-pointer bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border border-destructive/20"
+              >
                 RE-ASSIGN WORKER
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              <AnimatePresence>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              <AnimatePresence mode="popLayout">
                 {messages.map((msg, i) => (
                   <motion.div 
                     key={msg._id || i}
-                    initial={{ opacity: 0, x: msg.sender_role === 'Admin' ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    layout
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
                     className={`flex ${msg.sender_role === 'Admin' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`max-w-[70%] space-y-1 ${msg.sender_role === 'Admin' ? 'text-right' : 'text-left'}`}>
-                      <p className="text-[10px] text-muted-foreground font-medium px-1 underline">{msg.sender_name}</p>
+                      <p className="text-[10px] text-muted-foreground font-bold px-1 uppercase tracking-tighter">
+                        {msg.sender_role === 'Admin' ? 'Management' : msg.sender_name}
+                      </p>
                       <div className={`px-4 py-2 rounded-2xl text-sm ${
-                        msg.sender_role === 'Admin' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white/10 text-white'
+                        msg.sender_role === 'Admin' 
+                          ? 'bg-primary text-white rounded-tr-none shadow-lg shadow-primary/10' 
+                          : 'bg-white/10 text-white rounded-tl-none border border-white/5'
                       }`}>
                         {msg.message}
                       </div>
@@ -183,11 +246,12 @@ export default function EscalationsPage() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type a message to the worker..."
-                  className="w-full bg-background border border-white/10 rounded-2xl py-4 pl-6 pr-16 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm whitespace-pre-wrap break-words"
+                  className="w-full bg-background border border-white/10 rounded-2xl py-4 pl-6 pr-16 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
                 />
                 <button 
                   onClick={handleSend}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                  disabled={!input.trim()}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -196,11 +260,22 @@ export default function EscalationsPage() {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground space-y-4">
-             <MessageSquare className="w-16 h-16 opacity-10" />
-             <p>Select an escalation to begin investigation</p>
+             <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center">
+                <MessageSquare className="w-10 h-10 opacity-20" />
+             </div>
+             <p className="font-medium">Select an escalation to begin investigation</p>
           </div>
         )}
       </div>
+
+      {isAssignmentModalOpen && selected && (
+        <AssignmentModal 
+          complaintId={selected.id}
+          initialWorkerId={selected.worker_id}
+          onClose={() => setIsAssignmentModalOpen(false)}
+          onSuccess={handleAssignmentSuccess}
+        />
+      )}
     </div>
   );
 }

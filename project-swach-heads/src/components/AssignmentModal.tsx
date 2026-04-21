@@ -15,15 +15,16 @@ interface Worker {
 
 interface AssignmentModalProps {
   complaintId: string;
+  initialWorkerId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function AssignmentModal({ complaintId, onClose, onSuccess }: AssignmentModalProps) {
+export function AssignmentModal({ complaintId, initialWorkerId, onClose, onSuccess }: AssignmentModalProps) {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(initialWorkerId || null);
 
   useEffect(() => {
     fetch("/api/workers")
@@ -45,6 +46,17 @@ export function AssignmentModal({ complaintId, onClose, onSuccess }: AssignmentM
 
     setSubmitting(true);
     try {
+      // 1. If this is a RE-ASSIGNMENT (diff worker selected), clear the chat history first
+      if (initialWorkerId && selectedWorkerId !== initialWorkerId) {
+        try {
+          await fetch(`http://localhost:8001/chat/${complaintId}`, { method: 'DELETE' });
+        } catch (e) {
+          console.error("Failed to clear chat history during reassignment:", e);
+          // Continue anyway, reassignment is more important
+        }
+      }
+
+      // 2. Perform the reassignment
       const res = await fetch("/api/complaints", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -54,9 +66,9 @@ export function AssignmentModal({ complaintId, onClose, onSuccess }: AssignmentM
           worker_name: worker.name,
           // If the worker has a vehicle assigned in their profile, link it to the task
           vehicle_number: worker.assigned_vehicle_id || null, 
-          // Note: vehicle_type would need a separate fetch or field in worker doc
         }),
       });
+
       if (res.ok) {
         onSuccess();
         onClose();
@@ -145,7 +157,7 @@ export function AssignmentModal({ complaintId, onClose, onSuccess }: AssignmentM
              disabled={!selectedWorkerId || submitting}
              className="flex-2 bg-primary text-white py-3 px-8 rounded-2xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
            >
-             {submitting ? "ASSIGNING..." : "CONFIRM ASSIGNMENT"}
+             {submitting ? "ASSIGNING..." : initialWorkerId && selectedWorkerId !== initialWorkerId ? "CONFIRM RE-ASSIGNMENT" : "CONFIRM ASSIGNMENT"}
            </button>
         </div>
       </motion.div>
