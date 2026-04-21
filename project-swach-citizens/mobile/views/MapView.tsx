@@ -50,6 +50,7 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
     <View style={styles.container}>
       <MapView
         style={styles.map}
+        showsUserLocation={true}
         initialRegion={{
           latitude: 12.9716,
           longitude: 77.5946,
