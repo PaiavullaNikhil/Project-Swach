@@ -172,7 +172,7 @@ async def handle_location_update(sid, data):
     }).update({"$set": {"worker_location": GeoJSONPoint(coordinates=[lon, lat])}})
 
     # Broadcast to all (Admins)
-    await sio.emit("location_update", {"worker_id": worker_id.upper(), "lat": lat, "lon": lon})
+    await sio.emit("location_update", {"worker_id": worker_id, "lat": lat, "lon": lon})
 
 @app.get("/worker/login/{worker_id}")
 async def worker_login(worker_id: str):
@@ -232,7 +232,7 @@ async def update_location(worker_id: str, lat: float = Form(...), lon: float = F
     }).update({"$set": {"worker_location": GeoJSONPoint(coordinates=[lon, lat])}})
     
     # 3. Broadcast location to all clients (Admins)
-    await sio.emit("location_update", {"worker_id": worker_id.upper(), "lat": lat, "lon": lon})
+    await sio.emit("location_update", {"worker_id": worker_id, "lat": lat, "lon": lon})
     
     return {"status": "SUCCESS"}
 
