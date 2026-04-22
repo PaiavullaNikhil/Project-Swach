@@ -16,6 +16,21 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
   const [complaint, setComplaint] = useState(initialComplaint);
   const [refreshing, setRefreshing] = useState(false);
   const [socket, setSocket] = useState<any>(null);
+  const mapRef = React.useRef<MapView | null>(null);
+
+  // Sync data with backend to get latest worker assignment/location
+  const refreshData = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/complaint/${complaint._id}`);
+      setComplaint(response.data);
+    } catch (e) {
+      console.log("Failed to sync complaint data", e);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   // Socket listener for live updates
   useEffect(() => {
@@ -26,12 +41,29 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
     setSocket(newSocket);
 
     newSocket.on('location_update', (data) => {
-        if (data.worker_id === complaint.worker_id) {
-            setComplaint((prev: any) => ({
-                ...prev,
-                worker_location: { coordinates: [data.lon, data.lat] }
-            }));
-        }
+        // Case-insensitive check for worker_id matching
+        setComplaint((prev: any) => {
+            if (prev.worker_id && data.worker_id.toLowerCase() === prev.worker_id.toLowerCase()) {
+                const newLocation = { coordinates: [data.lon, data.lat] };
+                
+                // Auto-fit map to show both markers if vehicle is on the way
+                if (mapRef.current) {
+                    mapRef.current.fitToCoordinates([
+                        { latitude: prev.location.coordinates[1], longitude: prev.location.coordinates[0] },
+                        { latitude: data.lat, longitude: data.lon }
+                    ], {
+                        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+                        animated: true
+                    });
+                }
+
+                return {
+                    ...prev,
+                    worker_location: newLocation
+                };
+            }
+            return prev;
+        });
     });
 
     newSocket.on('status_update', (data) => {
@@ -39,15 +71,21 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
             setComplaint((prev: any) => ({
                 ...prev,
                 status: data.status,
-                worker_status: data.worker_status || data.status
+                worker_status: data.worker_status || data.status,
+                worker_name: data.worker_name || prev.worker_name,
+                worker_id: data.worker_id || prev.worker_id
             }));
+            // If just assigned, fetch full details to get names/vehicles
+            if (data.status === 'Assigned' || data.status === 'On the way') {
+                refreshData();
+            }
         }
     });
 
     return () => {
         newSocket.close();
     };
-  }, [complaint._id, complaint.worker_id]);
+  }, [complaint._id]);
 
   const steps = [
     { id: 'Reported', label: 'Report Filed', icon: Smartphone, color: '#3B82F6' },
@@ -102,13 +140,14 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
         {/* Live Map */}
         <View style={styles.mapCard}>
             <MapView
+                ref={mapRef}
                 style={styles.map}
                 showsUserLocation={true}
                 initialRegion={{
                    latitude: complaint.location.coordinates[1],
                    longitude: complaint.location.coordinates[0],
-                   latitudeDelta: 0.01,
-                   longitudeDelta: 0.01,
+                   latitudeDelta: 0.05,
+                   longitudeDelta: 0.05,
                 }}
             >
                 {/* Trash Location */}
