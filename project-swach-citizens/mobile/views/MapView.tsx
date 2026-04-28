@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
-import MapView, { Marker, Callout, Geojson } from 'react-native-maps';
-import { COLORS, API_URL } from '../constants/theme';
+import { StyleSheet, View, Text, ActivityIndicator, Image, TouchableOpacity, Dimensions } from 'react-native';
+import MapView, { Geojson } from 'react-native-maps';
+import { COLORS } from '../constants/theme';
+import { getMLAName } from '../constants/mlas';
+import { LinearGradient } from 'expo-linear-gradient';
+import { X, MapPin } from 'lucide-react-native';
 
 // Import ward borders
 import wardData from '../assets/wards.json';
+
+const { width } = Dimensions.get('window');
 
 interface MapViewProps {
   complaints: any[];
@@ -12,8 +17,9 @@ interface MapViewProps {
   onSelectComplaint: (complaint: any) => void;
 }
 
-export default function MapScreen({ complaints, loading, onSelectComplaint }: MapViewProps) {
+export default function MapScreen({ complaints, loading }: MapViewProps) {
   const [wardHealth, setWardHealth] = useState<Record<string, number>>({});
+  const [selectedWard, setSelectedWard] = useState<any>(null);
 
   useEffect(() => {
     if (!complaints) return;
@@ -30,11 +36,10 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
 
   const getWardColor = (wardName: string) => {
     const activeCount = wardHealth[wardName] || 0;
-    if (activeCount >= 5) return 'rgba(239, 68, 68, 0.7)'; // Red
-    if (activeCount >= 3) return 'rgba(249, 115, 22, 0.6)'; // Orange
-    if (activeCount >= 2) return 'rgba(245, 158, 11, 0.5)'; // Yellow
-    if (activeCount >= 1) return 'rgba(16, 185, 129, 0.4)'; // Light Green
-    return 'rgba(16, 185, 129, 0.1)'; // Transparent Green
+    if (activeCount >= 6) return 'rgba(239, 68, 68, 0.6)'; // High Load (6+) - Red
+    if (activeCount >= 3) return 'rgba(249, 115, 22, 0.5)'; // Warning (3-5) - Orange
+    if (activeCount >= 1) return 'rgba(234, 179, 8, 0.4)'; // Low Load (1-2) - Yellow
+    return 'rgba(16, 185, 129, 0.2)'; // Healthy (0) - Green
   };
 
   const geoData = (wardData as any).features ? (wardData as any) : ((wardData as any).default || {});
@@ -46,6 +51,36 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
       </View>
     );
   }
+
+  const memoizedWards = React.useMemo(() => {
+    return geoData.features.map((feature: any, index: number) => {
+      const wardName = feature.properties?.name_en;
+      const constituency = feature.properties?.assembly_constituency_name_en;
+      const cleanConst = constituency ? constituency.replace(/^\d+-/, '').trim() : 'Unknown';
+      const mlaName = getMLAName(constituency);
+      
+      return (
+        <Geojson
+          key={`ward-${wardName}-${index}`}
+          geojson={{
+            type: "FeatureCollection",
+            features: [feature]
+          }}
+          strokeColor={COLORS.primary + '20'}
+          fillColor={getWardColor(wardName)}
+          strokeWidth={1}
+          tappable={true}
+          onPress={() => setSelectedWard({
+            name: wardName,
+            id: feature.properties?.id,
+            constituency: cleanConst,
+            mlaName: mlaName,
+            count: wardHealth[wardName] || 0
+          })}
+        />
+      );
+    });
+  }, [geoData, wardHealth]);
 
   return (
     <View style={styles.container}>
@@ -59,53 +94,69 @@ export default function MapScreen({ complaints, loading, onSelectComplaint }: Ma
           longitudeDelta: 0.15,
         }}
       >
-        <Geojson
-          geojson={geoData}
-          strokeColor={COLORS.primary + '30'}
-          fillColor="rgba(16, 185, 129, 0.05)"
-          strokeWidth={0.5}
-        />
-
-        {geoData.features
-          .filter((f: any) => {
-            const name = f.properties?.name_en;
-            return name && (wardHealth[name] || 0) > 0;
-          })
-          .map((feature: any, index: number) => {
-            const wardName = feature.properties?.name_en;
-            return (
-              <Geojson
-                key={`hotspot-${wardName}-${index}`}
-                geojson={{
-                  type: "FeatureCollection",
-                  features: [feature]
-                }}
-                strokeColor={COLORS.error + '40'}
-                fillColor={getWardColor(wardName)}
-                strokeWidth={1}
-              />
-            );
-          })}
+        {memoizedWards}
       </MapView>
 
       <View style={styles.legend}>
+        <Text style={styles.legendTitle}>WARD HEALTH</Text>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, { backgroundColor: 'rgba(239, 68, 68, 0.8)' }]} />
-          <Text style={styles.legendText}>Critical Volume (5+)</Text>
+          <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />
+          <Text style={styles.legendText}>Critical <Text style={styles.legendRange}>(6+)</Text></Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, { backgroundColor: 'rgba(249, 115, 22, 0.8)' }]} />
-          <Text style={styles.legendText}>High Activity (3+)</Text>
+          <View style={[styles.dot, { backgroundColor: '#f97316' }]} />
+          <Text style={styles.legendText}>Moderate <Text style={styles.legendRange}>(3-5)</Text></Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, { backgroundColor: 'rgba(245, 158, 11, 0.8)' }]} />
-          <Text style={styles.legendText}>Moderate (1-2)</Text>
+          <View style={[styles.dot, { backgroundColor: '#eab308' }]} />
+          <Text style={styles.legendText}>Low <Text style={styles.legendRange}>(1-2)</Text></Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, { backgroundColor: 'rgba(16, 185, 129, 0.3)' }]} />
-          <Text style={styles.legendText}>Stable (0)</Text>
+          <View style={[styles.dot, { backgroundColor: '#22c55e' }]} />
+          <Text style={styles.legendText}>Healthy <Text style={styles.legendRange}>(0)</Text></Text>
         </View>
       </View>
+
+      {selectedWard && (
+        <View style={styles.mlaCardContainer}>
+          <View style={styles.mlaCard}>
+            <View style={styles.mlaHeader}>
+              <View style={styles.avatarWrapper}>
+                <Image 
+                  source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedWard.mlaName)}&background=059669&color=fff&rounded=true&size=128&bold=true` }} 
+                  style={styles.mlaImage} 
+                />
+                <View style={styles.activeIndicator} />
+              </View>
+              <View style={styles.mlaInfo}>
+                <Text style={styles.mlaLabel}>Constituency Representative</Text>
+                <Text style={styles.mlaName}>{selectedWard.mlaName}</Text>
+                <View style={styles.constituencyRow}>
+                  <MapPin size={10} color={'#64748b'} />
+                  <Text style={styles.mlaRole}>{selectedWard.constituency} • Ward {selectedWard.id}</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedWard(null)}>
+                <X size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.mlaStats}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Ward Name</Text>
+                <Text style={styles.statValue}>{selectedWard.name}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Active Issues</Text>
+                <Text style={[styles.statValue, { color: selectedWard.count > 5 ? '#ef4444' : '#10b981' }]}>
+                  {selectedWard.count} Reports
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
 
       {loading && <ActivityIndicator size="large" color={COLORS.primary} style={styles.loader} />}
     </View>
@@ -116,20 +167,65 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width: '100%', height: '100%' },
   loader: { position: 'absolute', top: '50%', left: '50%', marginLeft: -20 },
-  callout: { padding: 8, width: 150 },
-  calloutTitle: { fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
-  calloutText: { fontSize: 12, color: COLORS.textMuted },
   legend: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     right: 20,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  dot: { width: 12, height: 12, borderRadius: 6, marginRight: 8 },
-  legendText: { fontSize: 11, fontWeight: '700', color: COLORS.text },
+  legendTitle: { fontSize: 10, fontWeight: '800', color: '#64748b', marginBottom: 12, letterSpacing: 1.5, textAlign: 'center' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  legendText: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  legendRange: { fontWeight: '400', color: '#64748b', fontSize: 11 },
+  mlaCardContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+  },
+  mlaCard: {
+    borderRadius: 28,
+    padding: 24,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 15,
+  },
+  mlaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarWrapper: { position: 'relative' },
+  mlaImage: { width: 64, height: 64, borderRadius: 20, marginRight: 16 },
+  activeIndicator: { position: 'absolute', bottom: 0, right: 16, width: 16, height: 16, borderRadius: 8, backgroundColor: '#22c55e', borderWidth: 3, borderColor: '#fff' },
+  mlaInfo: { flex: 1 },
+  mlaLabel: { fontSize: 10, fontWeight: '700', color: '#10b981', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  mlaName: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
+  constituencyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  mlaRole: { fontSize: 12, color: '#64748b', fontWeight: '500', marginLeft: 4 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+  mlaStats: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 18,
+    borderRadius: 20,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
+  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1, backgroundColor: 'rgba(0,0,0,0.05)', height: '60%', alignSelf: 'center' },
+  statLabel: { fontSize: 10, fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 },
+  statValue: { fontSize: 15, fontWeight: '800', color: '#1e293b' },
 });

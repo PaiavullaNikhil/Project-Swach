@@ -17,5 +17,11 @@ export const COLORS = {
   border: '#E5E7EB',
 };
 
+export const GRADIENTS = {
+  primary: ['#3B82F6', '#2563EB'] as readonly [string, string, ...string[]],
+  accent: ['#F59E0B', '#FBBF24'] as readonly [string, string, ...string[]],
+  darkOverlay: ['transparent', 'rgba(0,0,0,0.8)'] as readonly [string, string, ...string[]],
+};
+
 // Replace with localhost IP of backend
 export const API_URL = `http://${localIp}:8001`;

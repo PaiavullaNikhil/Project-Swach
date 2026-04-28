@@ -10,14 +10,14 @@ import { io } from "socket.io-client";
 // Marker icons setup
 const truckIcon = L.icon({
   iconUrl: "/truck.png",
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  iconSize: [64, 64],
+  iconAnchor: [32, 32],
 });
 
 const trashIcon = L.icon({
   iconUrl: "/trash.png",
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  iconSize: [64, 64],
+  iconAnchor: [32, 32],
 });
 
 import { AssignmentModal } from "./AssignmentModal";
@@ -28,6 +28,7 @@ interface ComplaintPin {
   lng: number;
   ward: string;
   status: string;
+  priorityScore?: number;
 }
 
 interface apiComplaint {
@@ -35,6 +36,7 @@ interface apiComplaint {
   location: { coordinates: [number, number] };
   ward?: string;
   status: string;
+  priorityScore?: number;
 }
 
 interface WorkerLocation {
@@ -44,7 +46,19 @@ interface WorkerLocation {
   name?: string;
 }
 
-export default function LiveMap() {
+interface LiveMapProps {
+  searchQuery: string;
+  wardFilter: string | null;
+  layers: {
+    wards: boolean;
+    complaints: boolean;
+    workers: boolean;
+  };
+  wardHealthFilter: string | null;
+  onWardHealthFilterChange: (filter: string | null) => void;
+}
+
+export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFilter, onWardHealthFilterChange }: LiveMapProps) {
   const [mounted, setMounted] = useState(false);
   const [pins, setPins] = useState<ComplaintPin[]>([]);
   const [workers, setWorkers] = useState<WorkerLocation[]>([]);
@@ -53,7 +67,7 @@ export default function LiveMap() {
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [, setSocket] = useState<any>(null);
 
-  // Stats aggregation by ward
+  // Stats aggregation by ward (uses ALL pins so ward heat stays accurate)
   const wardStats = useMemo(() => {
     const stats: Record<string, { active: number, total: number, complaints: ComplaintPin[] }> = {};
     pins.forEach(pin => {
@@ -76,15 +90,71 @@ export default function LiveMap() {
     return "#ef4444"; // Red
   };
 
+  // Helper to get health level for a ward based on active complaint count
+  const getHealthLevel = (activeCount: number): string => {
+    if (activeCount >= 6) return "high";
+    if (activeCount >= 3) return "warning";
+    if (activeCount >= 1) return "low";
+    return "healthy";
+  };
+
+  // Determine which wards match the health filter
+  const wardsMatchingHealth = useMemo(() => {
+    if (!wardHealthFilter) return null; // null means no filter active
+    const matching = new Set<string>();
+    Object.entries(wardStats).forEach(([wardName, stats]) => {
+      if (getHealthLevel(stats.active) === wardHealthFilter) {
+        matching.add(wardName);
+      }
+    });
+    return matching;
+  }, [wardStats, wardHealthFilter]);
+
+  // Filter pins based on search, ward, and health filters
+  const filteredPins = useMemo(() => {
+    let result = pins;
+
+    // Ward filter
+    if (wardFilter) {
+      result = result.filter(pin => pin.ward === wardFilter);
+    }
+
+    // Search filter - by ward name or complaint ID
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(pin =>
+        pin.ward.toLowerCase().includes(q) ||
+        pin.id.toLowerCase().includes(q)
+      );
+    }
+
+    // Ward health filter - only show pins in wards matching the selected health level
+    if (wardsMatchingHealth) {
+      result = result.filter(pin => wardsMatchingHealth.has(pin.ward));
+    }
+
+    return result;
+  }, [pins, searchQuery, wardFilter, wardsMatchingHealth]);
+
   const wardStyle = (feature: any) => {
     const wardName = `${feature.properties.name_en} (Ward ${feature.properties.id})`;
     const active = wardStats[wardName]?.active || 0;
+
+    // If a ward filter is active, dim non-matching wards
+    const isMatchingWard = !wardFilter || wardName === wardFilter;
+    // If search is active, dim wards that don't match
+    const matchesSearch = !searchQuery.trim() || wardName.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    // If health filter is active, dim wards that don't match the health level
+    const matchesHealth = !wardHealthFilter || getHealthLevel(active) === wardHealthFilter;
+
+    const isVisible = isMatchingWard && matchesSearch && matchesHealth;
+
     return {
       fillColor: getColor(active),
-      weight: 1.5,
-      opacity: 0.8,
+      weight: isVisible ? 1.5 : 0.5,
+      opacity: isVisible ? 0.8 : 0.2,
       color: '#000000',
-      fillOpacity: 0.6
+      fillOpacity: isVisible ? 0.6 : 0.08
     };
   };
 
@@ -93,13 +163,16 @@ export default function LiveMap() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const mapPins = data.map((c: apiComplaint) => ({
-            id: c._id,
-            lat: c.location.coordinates[1],
-            lng: c.location.coordinates[0],
-            ward: c.ward || "Unknown",
-            status: c.status
-          }));
+          const mapPins = data
+            .filter((c: apiComplaint) => c.status !== "Cleared" && c.status !== "Resolved")
+            .map((c: apiComplaint) => ({
+              id: c._id,
+              lat: c.location.coordinates[1],
+              lng: c.location.coordinates[0],
+              ward: c.ward || "Unknown",
+              status: c.status,
+              priorityScore: c.priorityScore || 0
+            }));
           setPins(mapPins);
         }
       })
@@ -168,6 +241,9 @@ export default function LiveMap() {
 
   if (!mounted) return null;
 
+  // GeoJSON key that changes when filters change to force re-render of ward styles
+  const geoJsonKey = `${wardFilter || "all"}-${searchQuery}-${wardHealthFilter || "none"}`;
+
   return (
     <div className="w-full h-full">
       <MapContainer 
@@ -180,8 +256,11 @@ export default function LiveMap() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {wardGeoData && (
+
+        {/* Ward boundaries layer */}
+        {layers.wards && wardGeoData && (
           <GeoJSON 
+            key={geoJsonKey}
             data={wardGeoData} 
             style={wardStyle}
             onEachFeature={(feature, layer) => {
@@ -214,29 +293,92 @@ export default function LiveMap() {
                 },
                 mouseout: (e) => {
                   const l = e.target;
-                  l.setStyle({ fillOpacity: 0.6, weight: 1 });
+                  // Re-apply proper style on mouseout
+                  const isMatchingWard = !wardFilter || wardName === wardFilter;
+                  const matchesSearch = !searchQuery.trim() || wardName.toLowerCase().includes(searchQuery.trim().toLowerCase());
+                  const matchesHealth = !wardHealthFilter || getHealthLevel(wardStats[wardName]?.active || 0) === wardHealthFilter;
+                  const isVisible = isMatchingWard && matchesSearch && matchesHealth;
+                  l.setStyle({ 
+                    fillOpacity: isVisible ? 0.6 : 0.08, 
+                    weight: isVisible ? 1.5 : 0.5 
+                  });
                 }
               });
             }}
           />
         )}
+
+        {/* Complaint pins layer - uses filtered pins */}
+        {layers.complaints && filteredPins.map(pin => (
+          <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={trashIcon}>
+            <Popup>
+              <div className="text-xs space-y-1">
+                <p className="font-bold">{pin.ward}</p>
+                <p>Status: <span className={`font-semibold ${
+                  pin.status === "Reported" ? "text-red-500" : 
+                  pin.status === "Assigned" ? "text-amber-500" : 
+                  "text-green-500"
+                }`}>{pin.status}</span></p>
+                <p className="text-muted-foreground text-[10px]">ID: {pin.id}</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
+        {/* Worker markers layer */}
+        {layers.workers && workers.map(w => (
+          <Marker key={w.worker_id} position={[w.lat, w.lon]} icon={truckIcon}>
+            <Popup>
+              <div className="text-xs">
+                <p className="font-bold">{w.name || w.worker_id}</p>
+                <p className="text-muted-foreground">Worker</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
 
-      {/* Map Legend Overlay */}
+      {/* Map Legend Overlay - Clickable Ward Health Filters */}
       <div className="absolute bottom-6 right-6 glass p-4 rounded-xl z-[1000] border border-white/10 space-y-2">
-        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Ward Health</h5>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> High Load (6+)
+        <div className="flex items-center justify-between mb-3">
+          <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Ward Health</h5>
+          {wardHealthFilter && (
+            <button
+              onClick={() => onWardHealthFilterChange(null)}
+              className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#f97316]" /> Warning (3-5)
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#eab308]" /> Low Load (1-2)
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> Healthy (0)
-        </div>
+        {([
+          { key: "high", color: "bg-[#ef4444]", label: "High Load (6+)" },
+          { key: "warning", color: "bg-[#f97316]", label: "Warning (3-5)" },
+          { key: "low", color: "bg-[#eab308]", label: "Low Load (1-2)" },
+          { key: "healthy", color: "bg-[#22c55e]", label: "Healthy (0)" },
+        ] as const).map(item => (
+          <button
+            key={item.key}
+            onClick={() => onWardHealthFilterChange(wardHealthFilter === item.key ? null : item.key)}
+            className={`flex items-center gap-2 text-xs w-full px-2 py-1.5 rounded-lg transition-all duration-200 ${
+              wardHealthFilter === item.key
+                ? "bg-white/10 text-white font-semibold"
+                : wardHealthFilter && wardHealthFilter !== item.key
+                  ? "text-muted-foreground/40 hover:text-muted-foreground"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${item.color} transition-transform duration-200 ${
+              wardHealthFilter === item.key ? "scale-125" : ""
+            }`} />
+            {item.label}
+            {wardHealthFilter === item.key && (
+              <span className="ml-auto text-[10px] text-primary font-bold">
+                {wardsMatchingHealth?.size || 0}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {selectedComplaintId && (

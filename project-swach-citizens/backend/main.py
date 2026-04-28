@@ -2,7 +2,7 @@ import os
 import uuid
 import math
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -59,7 +59,7 @@ async def report_waste(
 
     # 3. Duplicate Detection (Bypassed for testing)
     # Check within 100 meters in the last 24 hours
-    # one_day_ago = datetime.utcnow() - timedelta(hours=24)
+    # one_day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
     # duplicate = await Complaint.find({
     #     ...
     # }).to_list(1)
@@ -98,7 +98,7 @@ async def report_waste(
         ward=geo_details["ward"],
         constituency=geo_details["constituency"],
         mla=geo_details["mla"],
-        category=ai_result.get("category", "General")
+        category=category if category != "General" else ai_result.get("category", "General")
     )
     await new_complaint.insert()
 
@@ -117,7 +117,7 @@ async def get_feed(limit: int = 20, offset: int = 0):
     Step 3: Feed View
     Only shows active tasks OR tasks cleared within the last 24 hours.
     """
-    one_day_ago = datetime.utcnow() - timedelta(hours=24)
+    one_day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
     return await Complaint.find({
         "$or": [
             {"status": {"$ne": "Cleared"}},

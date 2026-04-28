@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from beanie import Document
 from pydantic import BaseModel, Field
@@ -35,7 +35,7 @@ class Complaint(Document):
     upvotes: int = 1
     photo_url: str
     location: GeoJSONPoint
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ward: Optional[str] = None
     constituency: Optional[str] = None
     mla: Optional[str] = None

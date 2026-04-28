@@ -74,7 +74,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
     let watchSubscription: Location.LocationSubscription | null = null;
     
     const startWatching = async () => {
-      if (task.worker_status === 'On the way') {
+      if (task.worker_status === 'On the way' || task.worker_status === 'Work in progress') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
 
@@ -263,29 +263,38 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
                 <Text style={[styles.btnOutlineText, {color: '#fff'}]}>Arrived - Mark In Progress</Text>
             </TouchableOpacity>
           </View>
+
+{/* 
+            <TouchableOpacity 
+              style={[styles.floatingChatBtn, { top: 20, right: 16 }]} 
+              onPress={() => setIsChatVisible(true)}
+            >
+              <MessageSquare size={24} color="#fff" />
+            </TouchableOpacity>
+*/}
         </>
       ) : (
         // --- STANDARD WORKFLOW UI ---
         <ScrollView>
-          <Image source={{ uri: task.photo_url }} style={styles.heroImage} />
-          
-          {isEscalated() && (
+          <View style={{ position: 'relative' }}>
+            <Image source={{ uri: task.photo_url }} style={styles.heroImage} />
+{/* 
             <TouchableOpacity 
-              style={[styles.floatingChatBtn, { top: 220 }]} 
+              style={styles.heroChatBtn} 
               onPress={() => setIsChatVisible(true)}
             >
               <MessageSquare size={24} color="#fff" />
-              <View style={styles.unreadDot} />
             </TouchableOpacity>
-          )}
+*/}
+          </View>
 
           <View style={styles.content}>
             <Text style={styles.title}>{task.ward}</Text>
             
-            <View style={styles.statsCard}>
-               <View style={styles.statLine}><MapPin size={16} color={COLORS.textMuted}/><Text style={styles.statText}>Lat: {task.location?.coordinates[1].toFixed(5)}, Lon: {task.location?.coordinates[0].toFixed(5)}</Text></View>
-               <View style={styles.statLine}><Clock size={16} color={COLORS.textMuted}/><Text style={styles.statText}>Reported: {new Date(task.timestamp).toLocaleString()}</Text></View>
-            </View>
+              <View style={styles.statsCard}>
+                <View style={styles.statLine}><MapPin size={16} color={COLORS.textMuted}/><Text style={styles.statText}>Lat: {task.location?.coordinates[1].toFixed(5)}, Lon: {task.location?.coordinates[0].toFixed(5)}</Text></View>
+                <View style={styles.statLine}><Clock size={16} color={COLORS.textMuted}/><Text style={styles.statText}>Reported: {new Date(task.timestamp).toLocaleString()}</Text></View>
+              </View>
 
             <Text style={styles.sectionTitle}>Task Workflow</Text>
             
@@ -303,23 +312,30 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
             {isAssignedToMe && (
               <View style={styles.workflowBox}>
-                  {task.worker_status === 'Assigned' && (
+                  {/* Always show Navigate button when assigned, except if currently navigating */}
+                  {task.worker_status !== 'On the way' && (
                     <TouchableOpacity 
-                        style={[styles.btnOutline, task.worker_status === 'On the way' && styles.btnActive]} 
+                        style={styles.btnOutline} 
                         onPress={() => handleAction('status', 'On the way')}
                         disabled={loading}>
-                        <Navigation size={18} color={task.worker_status === 'On the way' ? '#fff' : COLORS.primary} />
-                        <Text style={[styles.btnOutlineText, task.worker_status === 'On the way' && {color: '#fff'}]}>2. Start Navigation</Text>
+                        <Navigation size={18} color={COLORS.primary} />
+                        <Text style={styles.btnOutlineText}>Start Navigation</Text>
                     </TouchableOpacity>
                   )}
 
+                  {/* Show Complete & Verify ONLY when in progress AND within 100m */}
                   {task.worker_status === 'Work in progress' && (
-                    <TouchableOpacity 
-                        style={[styles.btn, { backgroundColor: COLORS.success, marginTop: 16 }]} 
-                        onPress={onProceedToCapture}>
-                        <CheckCircle size={18} color="#fff" />
-                        <Text style={styles.btnText}>4. Complete & Verify</Text>
-                    </TouchableOpacity>
+                    userLocation && getDistanceBetween(
+                      userLocation.coords.latitude, userLocation.coords.longitude,
+                      task.location?.coordinates[1], task.location?.coordinates[0]
+                    ) <= 100 ? (
+                      <TouchableOpacity 
+                          style={[styles.btn, { backgroundColor: COLORS.success, marginTop: 16 }]} 
+                          onPress={onProceedToCapture}>
+                          <CheckCircle size={18} color="#fff" />
+                          <Text style={styles.btnText}>Complete & Verify</Text>
+                      </TouchableOpacity>
+                    ) : null
                   )}
               </View>
             )}
@@ -397,14 +413,16 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     zIndex: 10,
   },
-  unreadDot: {
+  heroChatBtn: {
     position: 'absolute',
-    top: 10,
-    right: 12,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: COLORS.error,
+    top: 20,
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#fff',
   },

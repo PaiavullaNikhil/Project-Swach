@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Users, UserCheck, UserPlus, Star, MapPin, Clock, Edit2 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Users, UserCheck, UserPlus, Star, MapPin, Clock, Edit2, X, Search, ArrowUp, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BANGALORE_WARDS } from "@/constants/wards";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -24,6 +24,7 @@ export default function WorkersPage() {
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [formData, setFormData] = useState({ name: "", worker_id: "", phone: "", ward: "", assigned_vehicle_id: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [assignTaskWorker, setAssignTaskWorker] = useState<Worker | null>(null);
 
   const fetchWorkers = async () => {
     try {
@@ -293,12 +294,261 @@ export default function WorkersPage() {
                   <Edit2 className="w-3.5 h-3.5" />
                   EDIT PROFILE
                 </button>
-                <button className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 py-2.5 rounded-xl text-xs font-bold transition-all">ASSIGN TASK</button>
+                <button 
+                  onClick={() => setAssignTaskWorker(worker)}
+                  className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 py-2.5 rounded-xl text-xs font-bold transition-all"
+                >
+                  ASSIGN TASK
+                </button>
               </div>
             </motion.div>
           ))}
         </div>
       )}
+
+      {/* Task Assignment Modal */}
+      {assignTaskWorker && (
+        <TaskAssignmentModal
+          worker={assignTaskWorker}
+          onClose={() => setAssignTaskWorker(null)}
+          onSuccess={() => {
+            setAssignTaskWorker(null);
+            fetchWorkers();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Task Assignment Modal ────────────────────────────────────────────────────
+
+interface Complaint {
+  _id: string;
+  photo_url: string;
+  ward: string;
+  upvotes: number;
+  timestamp: string;
+  status: string;
+  priorityScore?: number;
+}
+
+function TaskAssignmentModal({ worker, onClose, onSuccess }: { worker: Worker; onClose: () => void; onSuccess: () => void }) {
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"worker-ward" | "all">("worker-ward");
+
+  useEffect(() => {
+    fetch("/api/complaints")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          // Only show unassigned (Reported) complaints
+          setComplaints(data.filter((c: Complaint) => c.status === "Reported"));
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching complaints:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredComplaints = useMemo(() => {
+    let result = [...complaints];
+
+    // Ward filter
+    if (filterMode === "worker-ward" && worker.ward) {
+      result = result.filter(c => c.ward === worker.ward);
+    }
+
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(c =>
+        (c.ward || "").toLowerCase().includes(q) ||
+        c._id.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [complaints, filterMode, searchQuery, worker.ward]);
+
+  const handleAssign = async () => {
+    if (!selectedId) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/complaints", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          complaint_id: selectedId,
+          worker_id: worker.worker_id,
+          worker_name: worker.name,
+          vehicle_number: (worker as any).assigned_vehicle_id || null,
+        }),
+      });
+      if (res.ok) {
+        onSuccess();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to assign task");
+      }
+    } catch {
+      alert("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="glass border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+      >
+        {/* Header */}
+        <div className="p-6 border-b border-white/5">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-bold">Assign Task</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select a complaint to assign to <span className="text-primary font-semibold">{worker.name}</span>
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Filter tabs + Search */}
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl">
+              <button
+                onClick={() => setFilterMode("worker-ward")}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                  filterMode === "worker-ward"
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:text-white"
+                }`}
+              >
+                {worker.ward ? worker.ward.split(" (")[0] : "Worker Ward"}
+              </button>
+              <button
+                onClick={() => setFilterMode("all")}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                  filterMode === "all"
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:text-white"
+                }`}
+              >
+                All Wards
+              </button>
+            </div>
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Complaint List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              <p className="text-sm text-muted-foreground">Loading unassigned complaints...</p>
+            </div>
+          ) : filteredComplaints.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <AlertCircle className="w-10 h-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground text-center">
+                {complaints.length === 0
+                  ? "No unassigned complaints available"
+                  : filterMode === "worker-ward"
+                    ? "No complaints in this ward. Try 'All Wards'."
+                    : "No complaints match your search."
+                }
+              </p>
+              {filterMode === "worker-ward" && complaints.length > 0 && (
+                <button
+                  onClick={() => setFilterMode("all")}
+                  className="text-xs text-primary hover:underline mt-1"
+                >
+                  Show all wards
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredComplaints.map((c) => (
+              <div
+                key={c._id}
+                onClick={() => setSelectedId(c._id === selectedId ? null : c._id)}
+                className={`flex gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedId === c._id
+                    ? "bg-primary/10 border-primary/40 shadow-lg shadow-primary/10"
+                    : "bg-white/5 border-transparent hover:border-white/10"
+                }`}
+              >
+                <img src={c.photo_url} alt="Waste" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm font-semibold truncate">{c.ward || "Unknown"}</span>
+                    <span className="text-[10px] text-muted-foreground bg-white/5 px-2 py-0.5 rounded-full flex-shrink-0">
+                      {new Date(c.timestamp).toLocaleDateString([], { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <ArrowUp className="w-3 h-3 text-green-500" />
+                      {c.upvotes || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      ...{c._id.slice(-4)}
+                    </span>
+                    {c.priorityScore !== undefined && (
+                      <span className="ml-auto text-[10px] bg-white/5 px-1.5 py-0.5 rounded-full">
+                        Score: {Math.round(c.priorityScore)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {selectedId === c._id && (
+                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 self-center" />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-white/5 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 px-4 rounded-2xl font-bold border border-white/10 hover:bg-white/5 transition-all text-sm"
+          >
+            CANCEL
+          </button>
+          <button
+            onClick={handleAssign}
+            disabled={!selectedId || submitting}
+            className="flex-[2] bg-primary text-white py-3 px-8 rounded-2xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
+          >
+            {submitting ? "ASSIGNING..." : "CONFIRM ASSIGNMENT"}
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
