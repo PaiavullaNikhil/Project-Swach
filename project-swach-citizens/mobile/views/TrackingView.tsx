@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { ChevronLeft, MapPin, Truck, User, Clock, CheckCircle, Smartphone } from 'lucide-react-native';
-import { COLORS, API_URL, SOCKET_URL } from '../constants/theme';
+import { COLORS, GRADIENTS, API_URL, SOCKET_URL } from '../constants/theme';
 import axios from 'axios';
 import { io } from 'socket.io-client';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
+const { width } = Dimensions.get('window');
 
 interface TrackingViewProps {
   complaint: any;
@@ -18,7 +21,7 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
   const [socket, setSocket] = useState<any>(null);
   const mapRef = React.useRef<MapView | null>(null);
 
-  // Sync data with backend to get latest worker assignment/location
+  // Sync data with backend
   const refreshData = async () => {
     try {
       const response = await axios.get(`${API_URL}/complaint/${complaint._id}`);
@@ -41,18 +44,16 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
     setSocket(newSocket);
 
     newSocket.on('location_update', (data) => {
-        // Case-insensitive check for worker_id matching
         setComplaint((prev: any) => {
             if (prev.worker_id && data.worker_id.toLowerCase() === prev.worker_id.toLowerCase()) {
                 const newLocation = { coordinates: [data.lon, data.lat] };
                 
-                // Auto-fit map to show both markers if vehicle is on the way
                 if (mapRef.current) {
                     mapRef.current.fitToCoordinates([
                         { latitude: prev.location.coordinates[1], longitude: prev.location.coordinates[0] },
                         { latitude: data.lat, longitude: data.lon }
                     ], {
-                        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+                        edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
                         animated: true
                     });
                 }
@@ -75,7 +76,6 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
                 worker_name: data.worker_name || prev.worker_name,
                 worker_id: data.worker_id || prev.worker_id
             }));
-            // If just assigned, fetch full details to get names/vehicles
             if (data.status === 'Assigned' || data.status === 'On the way') {
                 refreshData();
             }
@@ -100,21 +100,29 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
     <View style={styles.timelineContainer}>
       {steps.map((step, index) => {
         const isCompleted = index <= currentStepIndex;
+        const isActive = index === currentStepIndex;
         const isLast = index === steps.length - 1;
         const Icon = step.icon;
 
         return (
           <View key={step.id} style={styles.timelineItem}>
             <View style={styles.timelineLeft}>
-                <View style={[styles.timelineDot, { backgroundColor: isCompleted ? step.color : '#E5E7EB' }]}>
-                    <Icon size={14} color="#fff" />
+                <View style={[
+                    styles.timelineDot, 
+                    { backgroundColor: isCompleted ? step.color : '#E5E7EB' },
+                    isActive && styles.activeDot
+                ]}>
+                    <Icon size={isActive ? 16 : 12} color="#fff" strokeWidth={3} />
+                    {isActive && (
+                        <Animated.View style={[styles.dotGlow, { backgroundColor: step.color }]} />
+                    )}
                 </View>
                 {!isLast && <View style={[styles.timelineLine, { backgroundColor: index < currentStepIndex ? step.color : '#E5E7EB' }]} />}
             </View>
             <View style={styles.timelineRight}>
-                <Text style={[styles.timelineLabel, isCompleted && { color: COLORS.text }]}>{step.label}</Text>
-                {isCompleted && index === currentStepIndex && (
-                    <Text style={styles.timelineStatus}>Current Status</Text>
+                <Text style={[styles.timelineLabel, isCompleted && { color: COLORS.text, fontWeight: '800' }]}>{step.label}</Text>
+                {isActive && (
+                    <Text style={[styles.timelineStatus, { color: step.color }]}>Live Tracking Active</Text>
                 )}
             </View>
           </View>
@@ -125,19 +133,19 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Premium Header */}
+      <LinearGradient colors={GRADIENTS.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <ChevronLeft color={COLORS.text} size={24} />
+          <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>
         <View>
             <Text style={styles.headerTitle}>Tracking Report</Text>
-            <Text style={styles.headerSubtitle}>ID: {complaint._id.substring(0, 8)}</Text>
+            <Text style={styles.headerSubtitle}>#{complaint._id.substring(0, 8).toUpperCase()}</Text>
         </View>
-      </View>
+      </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Live Map */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+        {/* Map Card */}
         <View style={styles.mapCard}>
             <MapView
                 ref={mapRef}
@@ -146,94 +154,111 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
                 initialRegion={{
                    latitude: complaint.location.coordinates[1],
                    longitude: complaint.location.coordinates[0],
-                   latitudeDelta: 0.05,
-                   longitudeDelta: 0.05,
+                   latitudeDelta: 0.02,
+                   longitudeDelta: 0.02,
                 }}
             >
-                {/* Trash Location */}
                 <Marker 
                     coordinate={{ latitude: complaint.location.coordinates[1], longitude: complaint.location.coordinates[0] }}
-                    image={require('../assets/trash.png')}
                     anchor={{ x: 0.5, y: 0.5 }}
-                />
+                >
+                    <Image source={require('../assets/trash.png')} style={{ width: 40, height: 40 }} />
+                </Marker>
 
-                {/* Worker Live Location (if status is On the way) */}
                 {complaint.worker_location && complaint.status !== 'Cleared' && (
                     <Marker 
                         coordinate={{ 
                             latitude: complaint.worker_location.coordinates[1], 
                             longitude: complaint.worker_location.coordinates[0] 
                         }}
-                        image={require('../assets/truck.png')}
                         anchor={{ x: 0.5, y: 0.5 }}
-                    />
+                    >
+                        <Image source={require('../assets/truck.png')} style={{ width: 50, height: 50 }} />
+                    </Marker>
                 )}
             </MapView>
-            <View style={styles.mapOverlay}>
-                <MapPin size={14} color={COLORS.textMuted} />
+            <BlurView intensity={80} tint="light" style={styles.mapOverlay}>
+                <MapPin size={14} color={COLORS.primary} />
                 <Text style={styles.wardTag}>{complaint.ward || 'General'}</Text>
-            </View>
+            </BlurView>
         </View>
 
         {/* Status Timeline Card */}
         <View style={styles.card}>
-            <Text style={styles.cardTitle}>Live Progress</Text>
+            <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Resolution Progress</Text>
+                <View style={styles.liveBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>LIVE</Text>
+                </View>
+            </View>
             {renderTimeline()}
         </View>
 
-        {/* Worker/Vehicle Info */}
+        {/* Worker/Vehicle Info Card (Frosted Glass) */}
         {complaint.worker_name && (
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Assigned Logistics</Text>
-                <View style={styles.infoRow}>
-                    <View style={styles.infoIcon}>
-                        <User color={COLORS.primary} size={20} />
-                    </View>
-                    <View>
-                        <Text style={styles.infoLabel}>Worker In Charge</Text>
-                        <Text style={styles.infoValue}>{complaint.worker_name}</Text>
-                    </View>
-                </View>
-                {complaint.vehicle_number && (
-                    <View style={[styles.infoRow, { marginTop: 16 }]}>
-                        <View style={[styles.infoIcon, { backgroundColor: COLORS.accent + '20' }]}>
-                            <Truck color={COLORS.accent} size={20} />
+            <View style={styles.workerCardContainer}>
+                <LinearGradient 
+                    colors={['#fff', '#f9fafb']} 
+                    style={styles.workerCard}
+                >
+                    <Text style={styles.cardTitle}>Assigned Logistics</Text>
+                    <View style={styles.infoRow}>
+                        <View style={styles.avatarContainer}>
+                            <User color={COLORS.primary} size={24} strokeWidth={2.5} />
                         </View>
-                        <View>
-                            <Text style={styles.infoLabel}>Vehicle Details</Text>
-                            <Text style={styles.infoValue}>{complaint.vehicle_number}</Text>
-                            <Text style={styles.infoSubValue}>{complaint.vehicle_type || 'Sanitation Truck'}</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.infoLabel}>Worker In Charge</Text>
+                            <Text style={styles.infoValue}>{complaint.worker_name}</Text>
                         </View>
+                        <TouchableOpacity style={styles.contactBtn}>
+                            <Smartphone color="#fff" size={20} />
+                        </TouchableOpacity>
                     </View>
-                )}
+                    
+                    {complaint.vehicle_number && (
+                        <View style={[styles.infoRow, { marginTop: 20 }]}>
+                            <View style={[styles.avatarContainer, { backgroundColor: COLORS.accentGlow }]}>
+                                <Truck color={COLORS.accent} size={24} strokeWidth={2.5} />
+                            </View>
+                            <View>
+                                <Text style={styles.infoLabel}>Vehicle Identification</Text>
+                                <Text style={[styles.infoValue, { color: COLORS.accent }]}>{complaint.vehicle_number}</Text>
+                                <Text style={styles.infoSubValue}>{complaint.vehicle_type || 'Waste Management Unit'}</Text>
+                            </View>
+                        </View>
+                    )}
+                </LinearGradient>
             </View>
         )}
 
-        {/* Comparison Photos */}
+        {/* Visual Updates Card */}
         <View style={styles.card}>
-             <Text style={styles.cardTitle}>Visual Updates</Text>
+             <Text style={styles.cardTitle}>Visual Evidence</Text>
              <View style={styles.photoContainer}>
                 <View style={styles.photoBox}>
                     <Image source={{ uri: complaint.photo_url }} style={styles.photo} />
-                    <View style={styles.photoLabel}><Text style={styles.photoLabelText}>REPORTED</Text></View>
+                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.photoLabelGradient}>
+                        <Text style={styles.photoLabelText}>BEFORE</Text>
+                    </LinearGradient>
                 </View>
                 {complaint.after_photo_url && (
                     <View style={styles.photoBox}>
                         <Image source={{ uri: complaint.after_photo_url }} style={styles.photo} />
-                        <View style={[styles.photoLabel, { backgroundColor: COLORS.primary }]}><Text style={styles.photoLabelText}>CLEARED</Text></View>
+                        <LinearGradient colors={['transparent', COLORS.primary + 'CC']} style={styles.photoLabelGradient}>
+                            <Text style={styles.photoLabelText}>AFTER</Text>
+                        </LinearGradient>
                     </View>
                 )}
              </View>
         </View>
-        
-        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Footer Info */}
-      <View style={styles.footer}>
+      <BlurView intensity={90} tint="light" style={styles.footer}>
          <Clock size={16} color={COLORS.textMuted} />
-         <Text style={styles.footerText}>Updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-      </View>
+         <Text style={styles.footerText}>Last synced: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</Text>
+      </BlurView>
     </View>
   );
 }
@@ -241,42 +266,51 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { 
-    flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 40,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border 
+    flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 50,
+    borderBottomLeftRadius: 30, borderBottomRightRadius: 30,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10
   },
-  backBtn: { marginRight: 16, width: 40, height: 40, borderRadius: 12, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  headerSubtitle: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
+  backBtn: { marginRight: 16, width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
   content: { flex: 1, padding: 20 },
-  mapCard: { height: 200, borderRadius: 24, overflow: 'hidden', marginBottom: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  mapCard: { height: 250, borderRadius: 28, overflow: 'hidden', marginBottom: 24, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
   map: { flex: 1 },
   mapOverlay: { 
-    position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(255,255,255,0.9)', 
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, flexDirection: 'row', alignItems: 'center' 
+    position: 'absolute', top: 16, left: 16, 
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden'
   },
-  wardTag: { fontSize: 10, fontWeight: '800', color: COLORS.text, marginLeft: 6, textTransform: 'uppercase' },
-  card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 20, textTransform: 'uppercase', letterSpacing: 0.5 },
-  timelineContainer: { marginLeft: 10 },
-  timelineItem: { flexDirection: 'row', marginBottom: 2 },
-  timelineLeft: { alignItems: 'center', width: 30, marginRight: 16 },
-  timelineDot: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', zIndex: 1 },
-  timelineLine: { width: 2, height: 40, backgroundColor: '#E5E7EB', marginVertical: -2 },
-  timelineRight: { flex: 1, paddingBottom: 20 },
-  timelineLabel: { fontSize: 14, fontWeight: '700', color: COLORS.textMuted },
-  timelineStatus: { fontSize: 11, fontWeight: '800', color: COLORS.primary, marginTop: 4 },
+  wardTag: { fontSize: 11, fontWeight: '900', color: COLORS.text, marginLeft: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  card: { backgroundColor: '#fff', borderRadius: 28, padding: 24, marginBottom: 24, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  cardTitle: { fontSize: 14, fontWeight: '900', color: COLORS.text, textTransform: 'uppercase', letterSpacing: 1 },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginRight: 6 },
+  liveText: { fontSize: 10, fontWeight: '900', color: '#EF4444' },
+  timelineContainer: { marginLeft: 6 },
+  timelineItem: { flexDirection: 'row' },
+  timelineLeft: { alignItems: 'center', width: 32, marginRight: 20 },
+  timelineDot: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10, position: 'relative' },
+  activeDot: { transform: [{ scale: 1.1 }], shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 5 },
+  dotGlow: { position: 'absolute', width: 44, height: 44, borderRadius: 22, opacity: 0.2, zIndex: -1 },
+  timelineLine: { width: 3, height: 45, backgroundColor: '#E5E7EB', marginVertical: -2 },
+  timelineRight: { flex: 1, paddingBottom: 25 },
+  timelineLabel: { fontSize: 15, fontWeight: '600', color: COLORS.textMuted },
+  timelineStatus: { fontSize: 12, fontWeight: '800', marginTop: 4 },
+  workerCardContainer: { marginBottom: 24, elevation: 6, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 15 },
+  workerCard: { borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' },
+  avatarContainer: { width: 52, height: 52, borderRadius: 18, backgroundColor: COLORS.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   infoRow: { flexDirection: 'row', alignItems: 'center' },
-  infoIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  infoLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase' },
-  infoValue: { fontSize: 15, fontWeight: '800', color: COLORS.text },
-  infoSubValue: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
-  photoContainer: { flexDirection: 'row', gap: 12 },
-  photoBox: { flex: 1, height: 120, borderRadius: 16, overflow: 'hidden', position: 'relative' },
+  infoLabel: { fontSize: 11, fontWeight: '800', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoValue: { fontSize: 18, fontWeight: '900', color: COLORS.text },
+  infoSubValue: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600', marginTop: 2 },
+  contactBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  photoContainer: { flexDirection: 'row', gap: 15 },
+  photoBox: { flex: 1, height: 160, borderRadius: 20, overflow: 'hidden', position: 'relative' },
   photo: { width: '100%', height: '100%' },
-  photoLabel: { position: 'absolute', bottom: 6, left: 6, backgroundColor: COLORS.error, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  photoLabelText: { color: '#fff', fontSize: 8, fontWeight: '900' },
-  markerContainer: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
-  markerBadge: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4 },
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  footerText: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, marginLeft: 8 },
+  photoLabelGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, justifyContent: 'flex-end', padding: 10 },
+  photoLabelText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  footer: { position: 'absolute', bottom: 0, width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 15, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', overflow: 'hidden' },
+  footerText: { fontSize: 11, fontWeight: '800', color: COLORS.textMuted, marginLeft: 8 },
 });

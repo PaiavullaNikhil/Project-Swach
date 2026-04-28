@@ -6,14 +6,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { COLORS, API_URL, SOCKET_URL } from './constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { COLORS, GRADIENTS, API_URL, SOCKET_URL } from './constants/theme';
+import WelcomeView from './views/WelcomeView';
 import FeedView from './views/FeedView';
 import MapView from './views/MapView';
 import ReportView from './views/ReportView';
 import TrackingView from './views/TrackingView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'map' | 'report' | 'tracking'>('feed');
+  const [activeTab, setActiveTab] = useState<'welcome' | 'feed' | 'map' | 'report' | 'tracking'>('welcome');
   const [previousTab, setPreviousTab] = useState<'feed' | 'map'>('feed');
   const [selectedComplaint, setSelectedComplaint] = useState<any | null>(null);
   const [userHash, setUserHash] = useState<string | null>(null);
@@ -132,17 +135,25 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         
         {/* Header */}
-        {activeTab !== 'report' && (
-          <View style={styles.header}>
+        {activeTab !== 'welcome' && activeTab !== 'report' && (
+          <LinearGradient
+            colors={GRADIENTS.primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
             <Text style={styles.headerTitle}>Project Swach</Text>
             <View style={styles.pointsBadge}>
               <Text style={styles.pointsText}>{userPoints} pts</Text>
             </View>
-          </View>
+          </LinearGradient>
         )}
 
         {/* Main Content */}
         <View style={styles.content}>
+          {activeTab === 'welcome' && (
+              <WelcomeView onGetStarted={() => setActiveTab('feed')} />
+          )}
           {activeTab === 'feed' && (
               <FeedView 
                   complaints={complaints} 
@@ -184,26 +195,39 @@ export default function App() {
         </View>
 
         {/* Bottom Navigation */}
-        {activeTab !== 'report' && activeTab !== 'tracking' && (
-          <View style={styles.navBar}>
-            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
-              <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={24} />
-              <Text style={[styles.navText, activeTab === 'feed' && styles.navTextActive]}>Feed</Text>
-            </TouchableOpacity>
+        {activeTab !== 'welcome' && activeTab !== 'report' && activeTab !== 'tracking' && (
+          <View style={styles.navBarWrapper}>
+            <View style={styles.navBarContainer}>
+              <BlurView intensity={90} tint="light" style={styles.navBar}>
+                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
+                  <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={26} />
+                  <Text style={[styles.navText, activeTab === 'feed' && styles.navTextActive]}>Feed</Text>
+                </TouchableOpacity>
 
+                <View style={styles.navItemPlaceholder} />
+
+                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
+                  <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={26} />
+                  <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
+                </TouchableOpacity>
+              </BlurView>
+            </View>
+            
             <View style={styles.reportBtnContainer}>
-              <TouchableOpacity style={styles.reportBtn} onPress={() => {
+              <TouchableOpacity style={styles.reportBtnWrapper} onPress={() => {
                   setPreviousTab(activeTab as 'feed' | 'map');
                   setActiveTab('report');
-              }}>
+              }} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={GRADIENTS.primary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.reportBtn}
+                >
                   <Plus color="#fff" size={32} />
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
-              <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={24} />
-              <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
-            </TouchableOpacity>
           </View>
         )}
       </SafeAreaView>
@@ -214,54 +238,79 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.primary },
   header: {
-    height: 80,
-    backgroundColor: COLORS.primary,
+    height: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
-  pointsBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  pointsText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  content: { flex: 1, backgroundColor: COLORS.background },
-  navBar: {
-    height: 80,
-    backgroundColor: COLORS.surface,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  navItem: { alignItems: 'center', justifyContent: 'center' },
-  navText: { fontSize: 12, color: COLORS.textMuted, marginTop: 4, fontWeight: '500' },
-  navTextActive: { color: COLORS.primary, fontWeight: '700' },
-  reportBtnContainer: {
-    top: -30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 8,
+    zIndex: 10,
+    marginBottom: -10, // Overlap with content slightly
+  },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  pointsBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  pointsText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  content: { flex: 1, backgroundColor: COLORS.background },
+  navBarWrapper: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  navBarContainer: {
+    width: '100%',
+    borderRadius: 30,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  navBar: {
+    height: 70,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  navItem: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  navItemPlaceholder: { flex: 0.5 },
+  navText: { fontSize: 12, color: COLORS.textMuted, marginTop: 4, fontWeight: '600' },
+  navTextActive: { color: COLORS.primary, fontWeight: '800' },
+  reportBtnContainer: {
+    position: 'absolute',
+    top: -30,
+    alignSelf: 'center',
+    zIndex: 1001,
+  },
+  reportBtnWrapper: {
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   reportBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.primary,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
