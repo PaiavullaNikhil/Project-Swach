@@ -11,6 +11,7 @@ interface Complaint {
   upvotes: number;
   timestamp: string;
   status: string;
+  worker_name?: string;
 }
 
 export function PriorityFeed() {
@@ -88,7 +89,14 @@ export function PriorityFeed() {
                     <MapPin className="w-3 h-3" />
                     {c._id.slice(-4)}
                   </span>
-                  <span className={c.status === 'Reported' ? 'text-blue-400 font-bold' : 'text-amber-400 font-bold'}>{c.status}</span>
+                  <span className={c.status === 'Reported' ? 'text-blue-400 font-bold' : 'text-amber-400 font-bold'}>
+                    {c.status}
+                    {c.worker_name && (
+                      <span className="hidden group-hover:inline ml-2 text-white/70 font-normal">
+                        ({c.worker_name})
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>

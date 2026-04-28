@@ -23,10 +23,13 @@ export default function FeedView({ userHash, complaints, loading, onRefresh, onS
 
   const upvote = async (id: string) => {
     try {
-      const formData = new FormData();
-      if (userHash) formData.append('user_hash', userHash);
-
-      const response = await axios.post(`${API_URL}/upvote/${id}`, formData);
+      const payload = userHash ? `user_hash=${encodeURIComponent(userHash)}` : '';
+      
+      const response = await axios.post(`${API_URL}/upvote/${id}`, payload, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
       
       // Update local state for immediate feedback
       setLocalComplaints(prev => prev.map(c => 

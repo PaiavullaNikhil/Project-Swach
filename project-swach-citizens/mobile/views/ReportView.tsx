@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, Alert, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, Alert, Animated, ScrollView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { X, Check, MapPin, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
 import { COLORS, API_URL } from '../constants/theme';
 import axios from 'axios';
+
+const CATEGORIES = ['General', 'Plastic', 'Organic', 'E-Waste', 'Debris', 'Hazardous'];
 
 interface ReportViewProps {
   onCancel: () => void;
@@ -19,6 +21,7 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
   const [photo, setPhoto] = useState<any>(null);
   const [location, setLocation] = useState<Location.LocationObject | null>(initialLocation);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('General');
   const cameraRef = useRef<any>(null);
   
   // Animation for the "Scanning" laser
@@ -122,6 +125,7 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
     formData.append('lat', location.coords.latitude.toString());
     formData.append('lon', location.coords.longitude.toString());
     if (userHash) formData.append('user_hash', userHash);
+    formData.append('category', selectedCategory);
     
     formData.append('photo', {
       uri: photo.uri,
@@ -208,6 +212,33 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
                 <Text style={styles.locationText}>
                     {location?.coords.latitude.toFixed(4)}, {location?.coords.longitude.toFixed(4)}
                 </Text>
+            </View>
+
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginBottom: 10, marginLeft: 4 }}>Select Waste Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                {CATEGORIES.map(cat => (
+                  <TouchableOpacity 
+                    key={cat} 
+                    onPress={() => setSelectedCategory(cat)}
+                    style={{
+                      backgroundColor: selectedCategory === cat ? COLORS.primary : 'rgba(255,255,255,0.15)',
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 20,
+                      marginRight: 10,
+                      borderWidth: 1,
+                      borderColor: selectedCategory === cat ? COLORS.primary : 'rgba(255,255,255,0.3)'
+                    }}
+                  >
+                    <Text style={{ 
+                      color: selectedCategory === cat ? '#fff' : '#ddd', 
+                      fontWeight: selectedCategory === cat ? 'bold' : '600',
+                      fontSize: 13
+                    }}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             <View style={styles.previewActions}>

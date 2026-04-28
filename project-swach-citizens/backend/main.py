@@ -98,7 +98,7 @@ async def report_waste(
         ward=geo_details["ward"],
         constituency=geo_details["constituency"],
         mla=geo_details["mla"],
-        category=ai_result.get("category", "General")
+        category=category if category != "General" else ai_result.get("category", "General")
     )
     await new_complaint.insert()
 
