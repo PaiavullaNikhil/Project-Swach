@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, ArrowUp, MapPin, UserPlus } from "lucide-react";
 import { AssignmentModal } from "./AssignmentModal";
+import Link from "next/link";
 
 interface Complaint {
   _id: string;
@@ -24,7 +25,14 @@ export function PriorityFeed() {
     fetch("/api/complaints")
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setComplaints(data.slice(0, 5));
+        if (Array.isArray(data)) {
+          // Filter out cleared/resolved complaints, show only active ones sorted by most recent
+          const active = data
+            .filter((c: Complaint) => c.status !== "Cleared" && c.status !== "Resolved")
+            .sort((a: Complaint, b: Complaint) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 5);
+          setComplaints(active);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -48,7 +56,12 @@ export function PriorityFeed() {
           <AlertCircle className="w-5 h-5 text-primary" />
           Priority Feed
         </h3>
-        <button className="text-sm text-primary hover:underline">View All</button>
+        <Link 
+          href="/reports/complaints" 
+          className="text-sm text-primary hover:underline transition-colors"
+        >
+          View All
+        </Link>
       </div>
 
       <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
