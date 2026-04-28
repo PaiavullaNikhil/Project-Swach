@@ -103,12 +103,14 @@ export default function ProofCaptureView({ task, workerHash, onCancel, onSuccess
                   {loading ? <ActivityIndicator color="#fff" /> : <Camera size={32} color="#fff" />}
                 </TouchableOpacity>
                 
+{/* 
                 <TouchableOpacity 
                   style={styles.chatBtn} 
                   onPress={() => setIsChatVisible(true)}
                 >
                   <MessageSquare size={24} color="#fff" />
                 </TouchableOpacity>
+*/}
               </View>
           </View>
         </>

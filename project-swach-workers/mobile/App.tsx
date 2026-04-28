@@ -192,7 +192,7 @@ export default function App() {
             {loading && <ActivityIndicator color="#fff" size="small" />}
             {worker && (
               <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                <LogOut color="#fff" size={20} />
+                <LogOut color={COLORS.primary} size={18} strokeWidth={2.5} />
               </TouchableOpacity>
             )}
           </View>
@@ -248,6 +248,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', alignItems: 'center' 
   },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  logoutBtn: { padding: 4 },
+  logoutBtn: { 
+    backgroundColor: '#fff', 
+    width: 36, 
+    height: 36, 
+    borderRadius: 10, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   content: { flex: 1 }
 });
