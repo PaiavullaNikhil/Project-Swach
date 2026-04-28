@@ -37,7 +37,7 @@ export default function TasksView({ tasks, loading, onRefresh, onSelectTask }: T
         <View style={[styles.actionLabel, { backgroundColor: item.worker_id ? COLORS.success + '15' : COLORS.primary + '15' }]}>
             <ArrowRight size={14} color={item.worker_id ? COLORS.success : COLORS.primary} />
             <Text style={[styles.actionLabelText, { color: item.worker_id ? COLORS.success : COLORS.primary }]}>
-                {item.worker_id ? 'TAP TO NAVIGATE & CLEAN' : 'CLAIM & START CLEANING'}
+                {item.worker_id ? 'TAP TO NAVIGATE' : 'CLAIM & START CLEANING'}
             </Text>
         </View>
       </View>

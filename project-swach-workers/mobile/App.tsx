@@ -157,8 +157,26 @@ export default function App() {
     }
   }, [location, socket, worker]);
 
+  const getDistanceBetween = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
   const handleSelectTask = (task: any) => {
     setSelectedTask(task);
+    if (task.worker_status === 'Work in progress' && location) {
+      const dist = getDistanceBetween(
+        location.coords.latitude, location.coords.longitude,
+        task.location?.coordinates[1], task.location?.coordinates[0]
+      );
+      if (dist <= 100) {
+        setActiveScreen('proof_capture');
+        return;
+      }
+    }
     setActiveScreen('active_task');
   };
 
@@ -208,6 +226,7 @@ export default function App() {
           {activeScreen === 'proof_capture' && selectedTask && (
             <ProofCaptureView
               task={selectedTask}
+              workerHash={worker?.worker_id}
               onCancel={() => setActiveScreen('active_task')}
               onSuccess={async () => {
                 await fetchTasks();

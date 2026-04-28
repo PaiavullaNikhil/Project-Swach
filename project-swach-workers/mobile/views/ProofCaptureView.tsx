@@ -4,18 +4,21 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import { COLORS, API_URL } from '../constants/theme';
-import { Check, X, Camera } from 'lucide-react-native';
+import { Check, X, Camera, MessageSquare } from 'lucide-react-native';
+import ChatModal from '../components/ChatModal';
 
 interface ProofCaptureViewProps {
   task: any;
+  workerHash: string;
   onCancel: () => void;
   onSuccess: () => void;
 }
 
-export default function ProofCaptureView({ task, onCancel, onSuccess }: ProofCaptureViewProps) {
+export default function ProofCaptureView({ task, workerHash, onCancel, onSuccess }: ProofCaptureViewProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
@@ -91,17 +94,22 @@ export default function ProofCaptureView({ task, onCancel, onSuccess }: ProofCap
                <Text style={styles.headerText}>Capture "After" Proof</Text>
              </View>
              
-             <View style={styles.controls}>
-               <TouchableOpacity style={styles.btnCancel} onPress={onCancel}>
-                 <X size={24} color="#fff" />
-               </TouchableOpacity>
-               
-               <TouchableOpacity style={styles.btnCapture} onPress={takePicture} disabled={loading}>
-                 {loading ? <ActivityIndicator color="#fff" /> : <Camera size={32} color="#fff" />}
-               </TouchableOpacity>
-               
-               <View style={styles.btnSpacer} />
-             </View>
+              <View style={styles.controls}>
+                <TouchableOpacity style={styles.btnCancel} onPress={onCancel}>
+                  <X size={24} color="#fff" />
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.btnCapture} onPress={takePicture} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#fff" /> : <Camera size={32} color="#fff" />}
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.chatBtn} 
+                  onPress={() => setIsChatVisible(true)}
+                >
+                  <MessageSquare size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
           </View>
         </>
       ) : (
@@ -120,6 +128,13 @@ export default function ProofCaptureView({ task, onCancel, onSuccess }: ProofCap
           </View>
         </>
       )}
+      <ChatModal 
+        isVisible={isChatVisible}
+        onClose={() => setIsChatVisible(false)}
+        complaintId={task._id}
+        workerId={workerHash}
+        workerName={task.worker_name || 'Worker'}
+      />
     </View>
   );
 }
@@ -133,8 +148,8 @@ const styles = StyleSheet.create({
   headerText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 },
   btnCancel: { backgroundColor: 'rgba(0,0,0,0.5)', padding: 16, borderRadius: 30 },
-  btnSpacer: { width: 56 },
   btnCapture: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#fff' },
+  chatBtn: { backgroundColor: 'rgba(59, 130, 246, 0.8)', padding: 16, borderRadius: 30, borderWidth: 2, borderColor: '#fff' },
   overlayConfirm: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   confirmText: { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 20, color: COLORS.text },
   confirmControls: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
