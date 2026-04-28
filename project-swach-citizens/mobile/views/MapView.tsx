@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Image, TouchableOpacity, Dimensions } from 'react-native';
 import MapView, { Geojson } from 'react-native-maps';
-import { COLORS, GRADIENTS } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 import { getMLAName } from '../constants/mlas';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, MapPin, Users } from 'lucide-react-native';
+import { X, MapPin } from 'lucide-react-native';
 
 // Import ward borders
 import wardData from '../assets/wards.json';
@@ -98,29 +97,29 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
         {memoizedWards}
       </MapView>
 
-      <BlurView intensity={80} tint="light" style={styles.legend}>
+      <View style={styles.legend}>
         <Text style={styles.legendTitle}>WARD HEALTH</Text>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />
-          <Text style={styles.legendText}>Critical</Text>
+          <Text style={styles.legendText}>Critical <Text style={styles.legendRange}>(6+)</Text></Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: '#f97316' }]} />
-          <Text style={styles.legendText}>Moderate</Text>
+          <Text style={styles.legendText}>Moderate <Text style={styles.legendRange}>(3-5)</Text></Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: '#eab308' }]} />
-          <Text style={styles.legendText}>Low</Text>
+          <Text style={styles.legendText}>Low <Text style={styles.legendRange}>(1-2)</Text></Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: '#22c55e' }]} />
-          <Text style={styles.legendText}>Healthy</Text>
+          <Text style={styles.legendText}>Healthy <Text style={styles.legendRange}>(0)</Text></Text>
         </View>
-      </BlurView>
+      </View>
 
       {selectedWard && (
         <View style={styles.mlaCardContainer}>
-          <BlurView intensity={90} tint="light" style={styles.mlaCard}>
+          <View style={styles.mlaCard}>
             <View style={styles.mlaHeader}>
               <View style={styles.avatarWrapper}>
                 <Image 
@@ -133,7 +132,7 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
                 <Text style={styles.mlaLabel}>Constituency Representative</Text>
                 <Text style={styles.mlaName}>{selectedWard.mlaName}</Text>
                 <View style={styles.constituencyRow}>
-                  <MapPin size={10} color={COLORS.textMuted} />
+                  <MapPin size={10} color={'#64748b'} />
                   <Text style={styles.mlaRole}>{selectedWard.constituency} • Ward {selectedWard.id}</Text>
                 </View>
               </View>
@@ -150,19 +149,12 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Active Issues</Text>
-                <Text style={[styles.statValue, { color: selectedWard.count > 5 ? COLORS.error : COLORS.primary }]}>
+                <Text style={[styles.statValue, { color: selectedWard.count > 5 ? '#ef4444' : '#10b981' }]}>
                   {selectedWard.count} Reports
                 </Text>
               </View>
             </View>
-
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
-              <LinearGradient colors={GRADIENTS.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientBtn}>
-                <Users color="#fff" size={18} />
-                <Text style={styles.actionBtnText}>Connect with Ward Office</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </BlurView>
+          </View>
         </View>
       )}
 
@@ -179,74 +171,61 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 60,
     right: 20,
-    padding: 12,
+    padding: 16,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  legendTitle: { fontSize: 10, fontWeight: '900', color: COLORS.textMuted, marginBottom: 10, letterSpacing: 1, textAlign: 'center' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  legendText: { fontSize: 11, fontWeight: '800', color: COLORS.text },
-  mlaCardContainer: {
-    position: 'absolute',
-    bottom: 100, // Above floating nav
-    left: 20,
-    right: 20,
+    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 8,
+  },
+  legendTitle: { fontSize: 10, fontWeight: '800', color: '#64748b', marginBottom: 12, letterSpacing: 1.5, textAlign: 'center' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  legendText: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  legendRange: { fontWeight: '400', color: '#64748b', fontSize: 11 },
+  mlaCardContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
   },
   mlaCard: {
     borderRadius: 28,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
-    overflow: 'hidden',
+    padding: 24,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 15,
   },
   mlaHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 20,
   },
   avatarWrapper: { position: 'relative' },
-  mlaImage: { width: 56, height: 56, borderRadius: 20, marginRight: 15 },
-  activeIndicator: { position: 'absolute', bottom: 0, right: 15, width: 14, height: 14, borderRadius: 7, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#fff' },
+  mlaImage: { width: 64, height: 64, borderRadius: 20, marginRight: 16 },
+  activeIndicator: { position: 'absolute', bottom: 0, right: 16, width: 16, height: 16, borderRadius: 8, backgroundColor: '#22c55e', borderWidth: 3, borderColor: '#fff' },
   mlaInfo: { flex: 1 },
-  mlaLabel: { fontSize: 10, fontWeight: '800', color: COLORS.primary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  mlaName: { fontSize: 18, fontWeight: '900', color: COLORS.text },
+  mlaLabel: { fontSize: 10, fontWeight: '700', color: '#10b981', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  mlaName: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
   constituencyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  mlaRole: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600', marginLeft: 4 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+  mlaRole: { fontSize: 12, color: '#64748b', fontWeight: '500', marginLeft: 4 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
   mlaStats: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    padding: 15,
+    backgroundColor: '#f8fafc',
+    paddingVertical: 18,
     borderRadius: 20,
-    marginBottom: 15,
+    marginBottom: 0,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.03)',
   },
   statItem: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: 'rgba(0,0,0,0.05)', height: '100%' },
-  statLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 4 },
-  statValue: { fontSize: 14, fontWeight: '900', color: COLORS.text },
-  actionButton: { width: '100%' },
-  gradientBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 18,
-    gap: 10,
-  },
-  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  statDivider: { width: 1, backgroundColor: 'rgba(0,0,0,0.05)', height: '60%', alignSelf: 'center' },
+  statLabel: { fontSize: 10, fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 },
+  statValue: { fontSize: 15, fontWeight: '800', color: '#1e293b' },
 });
