@@ -28,7 +28,6 @@ export default function MapPage() {
   const [layers, setLayers] = useState({
     wards: true,
     complaints: true,
-    workers: true,
   });
   const [wardHealthFilter, setWardHealthFilter] = useState<string | null>(null);
 
@@ -212,7 +211,6 @@ export default function MapPage() {
                   {([
                     { key: "wards" as const, label: "Ward Boundaries", color: "bg-emerald-400" },
                     { key: "complaints" as const, label: "Complaint Pins", color: "bg-red-400" },
-                    { key: "workers" as const, label: "Worker Locations", color: "bg-blue-400" },
                   ]).map(layer => (
                     <label key={layer.key} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
                       <div className="relative">

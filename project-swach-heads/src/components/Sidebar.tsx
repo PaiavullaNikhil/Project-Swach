@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Map, BarChart2, Users, AlertCircle, FileText, Settings, LogOut, Truck } from "lucide-react";
+import { Home, Map, BarChart2, Users, AlertCircle, FileText, LogOut, Truck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
@@ -34,7 +34,7 @@ export function Sidebar() {
     <div className="w-64 h-screen flex flex-col glass border-r sticky top-0">
       <div className="p-6">
         <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent">
-          Swach Heads
+          Swach
         </h1>
         <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-semibold">
           Admin Dashboard
@@ -63,10 +63,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-white/5 space-y-2">
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-muted-foreground hover:bg-white/5 hover:text-white rounded-xl transition-all">
-          <Settings className="w-5 h-5" />
-          <span className="font-medium">Settings</span>
-        </button>
+
         <button 
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 w-full text-destructive hover:bg-destructive/10 rounded-xl transition-all"

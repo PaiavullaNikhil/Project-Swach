@@ -46,7 +46,7 @@ export default function LoginPage() {
              <div className="w-16 h-16 bg-gradient-to-br from-primary to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/20">
                 <ShieldCheck className="w-8 h-8 text-white" />
              </div>
-             <h1 className="text-3xl font-bold tracking-tight mb-2">Swach Heads</h1>
+             <h1 className="text-3xl font-bold tracking-tight mb-2">Swach</h1>
              <p className="text-muted-foreground">Administrative Control Portal</p>
           </div>
 

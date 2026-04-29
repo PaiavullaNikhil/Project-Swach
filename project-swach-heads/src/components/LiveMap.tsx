@@ -8,12 +8,6 @@ import { io } from "socket.io-client";
 
 // Fix for default marker icons in Leaflet with Next.js
 // Marker icons setup
-const truckIcon = L.icon({
-  iconUrl: "/truck.png",
-  iconSize: [64, 64],
-  iconAnchor: [32, 32],
-});
-
 const trashIcon = L.icon({
   iconUrl: "/trash.png",
   iconSize: [64, 64],
@@ -39,12 +33,7 @@ interface apiComplaint {
   priorityScore?: number;
 }
 
-interface WorkerLocation {
-  worker_id: string;
-  lat: number;
-  lon: number;
-  name?: string;
-}
+
 
 interface LiveMapProps {
   searchQuery: string;
@@ -52,7 +41,6 @@ interface LiveMapProps {
   layers: {
     wards: boolean;
     complaints: boolean;
-    workers: boolean;
   };
   wardHealthFilter: string | null;
   onWardHealthFilterChange: (filter: string | null) => void;
@@ -61,7 +49,6 @@ interface LiveMapProps {
 export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFilter, onWardHealthFilterChange }: LiveMapProps) {
   const [mounted, setMounted] = useState(false);
   const [pins, setPins] = useState<ComplaintPin[]>([]);
-  const [workers, setWorkers] = useState<WorkerLocation[]>([]);
   const [wardGeoData, setWardGeoData] = useState<any>(null);
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
@@ -179,29 +166,11 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
       .catch(err => console.error("Error fetching pins:", err));
   };
 
-  const fetchWorkers = () => {
-    fetch("/api/workers")
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-            const activeWorkers = data
-                .filter(w => w.current_location)
-                .map(w => ({
-                    worker_id: w.worker_id,
-                    lat: w.current_location.coordinates[1],
-                    lon: w.current_location.coordinates[0],
-                    name: w.name
-                }));
-            setWorkers(activeWorkers);
-        }
-      })
-      .catch(err => console.error("Error fetching workers:", err));
-  };
+
 
   useEffect(() => {
     setMounted(true);
     fetchPins();
-    fetchWorkers();
 
     // Fetch GeoJSON ward data
     fetch("/wards.json")
@@ -217,18 +186,6 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
         transports: ['websocket'],
     });
     setSocket(newSocket);
-
-    newSocket.on("location_update", (data: { worker_id: string, lat: number, lon: number }) => {
-        setWorkers(prev => {
-            const index = prev.findIndex(w => w.worker_id === data.worker_id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = { ...updated[index], lat: data.lat, lon: data.lon };
-                return updated;
-            }
-            return [...prev, { worker_id: data.worker_id, lat: data.lat, lon: data.lon }];
-        });
-    });
 
     newSocket.on("status_update", () => {
         fetchPins(); // Simplest way to ensure consistency
@@ -320,18 +277,6 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
                   "text-green-500"
                 }`}>{pin.status}</span></p>
                 <p className="text-muted-foreground text-[10px]">ID: {pin.id}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Worker markers layer */}
-        {layers.workers && workers.map(w => (
-          <Marker key={w.worker_id} position={[w.lat, w.lon]} icon={truckIcon}>
-            <Popup>
-              <div className="text-xs">
-                <p className="font-bold">{w.name || w.worker_id}</p>
-                <p className="text-muted-foreground">Worker</p>
               </div>
             </Popup>
           </Marker>

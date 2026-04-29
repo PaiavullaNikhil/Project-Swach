@@ -130,10 +130,29 @@ export async function GET() {
       }
     ]).toArray();
 
+    // 6. Category Distribution
+    const categoryStats = await db.collection("complaints").aggregate([
+      {
+        $group: {
+          _id: "$category",
+          value: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: { $ifNull: ["$_id", "Uncategorized"] },
+          value: 1
+        }
+      },
+      { $sort: { value: -1 } }
+    ]).toArray();
+
     return NextResponse.json({
       dailyTrends,
       hourlyStats,
       statusStats,
+      categoryStats,
       wardPerformance,
       bestWorkers
     });

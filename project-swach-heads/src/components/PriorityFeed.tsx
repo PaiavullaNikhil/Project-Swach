@@ -29,7 +29,7 @@ export function PriorityFeed() {
           // Filter out cleared/resolved complaints, show only active ones sorted by most recent
           const active = data
             .filter((c: Complaint) => c.status !== "Cleared" && c.status !== "Resolved")
-            .sort((a: Complaint, b: Complaint) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .sort((a: Complaint, b: Complaint) => (b.upvotes || 0) - (a.upvotes || 0))
             .slice(0, 5);
           setComplaints(active);
         }

@@ -5,14 +5,17 @@ import { StatsCard } from "@/components/StatsCard";
 import { PriorityFeed } from "@/components/PriorityFeed";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  AreaChart, Area 
+  AreaChart, Area, PieChart, Pie, Cell 
 } from "recharts";
-import { Activity, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { Activity, CheckCircle, Clock, AlertTriangle, PieChart as PieIcon } from "lucide-react";
 import { motion } from "framer-motion";
+
+const COLORS = ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function DashboardOverview() {
   const [stats, setStats] = useState({ total: 0, active: 0, cleared: 0, escalated: 0 });
   const [wardData, setWardData] = useState([]);
+  const [categoryData, setCategoryData] = useState([]);
   const [trends, setTrends] = useState<{name: string, complaints: number, resolved: number}[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +34,7 @@ export default function DashboardOverview() {
       .then(data => {
         if (data.wardPerformance) setWardData(data.wardPerformance);
         if (data.dailyTrends) setTrends(data.dailyTrends);
+        if (data.categoryStats) setCategoryData(data.categoryStats);
         setLoading(false);
       })
       .catch(err => {
@@ -88,7 +92,7 @@ export default function DashboardOverview() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Charts Section */}
+        {/* Main Charts Area */}
         <div className="lg:col-span-2 space-y-8">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -158,7 +162,26 @@ export default function DashboardOverview() {
                     <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="bg-[#18181b] border border-[#27272a] p-3 rounded-lg shadow-2xl">
+                              <p className="text-xs font-bold mb-2 border-b border-white/10 pb-1">{label}</p>
+                              <div className="space-y-1">
+                                <div className="flex justify-between gap-4 text-[10px]">
+                                  <span className="text-primary font-medium uppercase">Resolved:</span>
+                                  <span className="font-bold text-white">{payload[0].value}</span>
+                                </div>
+                                <div className="flex justify-between gap-4 text-[10px]">
+                                  <span className="text-amber-500 font-medium uppercase">Active:</span>
+                                  <span className="font-bold text-white">{payload[1].value}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
                     />
                     <Bar dataKey="cleared" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="active" fill="#27272a" radius={[4, 4, 0, 0]} />
@@ -169,8 +192,56 @@ export default function DashboardOverview() {
           </motion.div>
         </div>
 
-        {/* Priority Feed Section */}
-        <div className="lg:col-span-1">
+        {/* Sidebar Analytics Area */}
+        <div className="lg:col-span-1 space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="glass rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <PieIcon className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold">Category Distribution</h3>
+            </div>
+            <div className="h-[250px] relative">
+              {loading ? (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Analyzing categories...</div>
+              ) : categoryData.length === 0 ? (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No category data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {categoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {categoryData.map((entry: any, index) => (
+                <div key={entry.name} className="flex items-center gap-2 text-[10px]">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                  <span className="text-muted-foreground truncate">{entry.name}</span>
+                  <span className="font-bold ml-auto">{entry.value}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
           <PriorityFeed />
         </div>
       </div>
