@@ -264,28 +264,28 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
             </TouchableOpacity>
           </View>
 
-{/* 
-            <TouchableOpacity 
-              style={[styles.floatingChatBtn, { top: 20, right: 16 }]} 
-              onPress={() => setIsChatVisible(true)}
-            >
-              <MessageSquare size={24} color="#fff" />
-            </TouchableOpacity>
-*/}
+            {isEscalated() && (
+              <TouchableOpacity 
+                style={[styles.floatingChatBtn, { top: 20, right: 16 }]} 
+                onPress={() => setIsChatVisible(true)}
+              >
+                <MessageSquare size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
         </>
       ) : (
         // --- STANDARD WORKFLOW UI ---
         <ScrollView>
           <View style={{ position: 'relative' }}>
             <Image source={{ uri: task.photo_url }} style={styles.heroImage} />
-{/* 
-            <TouchableOpacity 
-              style={styles.heroChatBtn} 
-              onPress={() => setIsChatVisible(true)}
-            >
-              <MessageSquare size={24} color="#fff" />
-            </TouchableOpacity>
-*/}
+            {isEscalated() && (
+              <TouchableOpacity 
+                style={styles.heroChatBtn} 
+                onPress={() => setIsChatVisible(true)}
+              >
+                <MessageSquare size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.content}>
