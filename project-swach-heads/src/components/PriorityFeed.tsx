@@ -30,7 +30,7 @@ export function PriorityFeed() {
           const active = data
             .filter((c: Complaint) => c.status !== "Cleared" && c.status !== "Resolved")
             .sort((a: Complaint, b: Complaint) => (b.upvotes || 0) - (a.upvotes || 0))
-            .slice(0, 5);
+            .slice(0, 10);
           setComplaints(active);
         }
         setLoading(false);

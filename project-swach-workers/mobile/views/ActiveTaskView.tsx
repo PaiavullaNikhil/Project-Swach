@@ -93,11 +93,24 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
         watchSubscription = await Location.watchPositionAsync(
           { 
             accuracy: Location.Accuracy.High, 
-            distanceInterval: 10, // Update every 10 meters
-            timeInterval: 10000    // Or every 10 seconds
+            distanceInterval: 5, // More frequent for precise geofencing
+            timeInterval: 5000   
           },
           async (loc) => {
             setUserLocation(loc);
+
+            // AUTO-ARRIVAL DETECTION (10M Radius)
+            if (task.worker_status === 'On the way') {
+              const distToSite = getDistanceBetween(
+                loc.coords.latitude, loc.coords.longitude,
+                task.location?.coordinates[1], task.location?.coordinates[0]
+              );
+              
+              if (distToSite <= 10) {
+                console.log("AUTO-ARRIVAL: Worker within 10m. Triggering status update.");
+                handleAction('status', 'Work in progress');
+              }
+            }
 
             // Re-fetch route if worker moved 500m+ from last route fetch
             if (lastRouteFetchRef.current) {
@@ -255,13 +268,11 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
                 )}
              </View>
              
-             <TouchableOpacity 
-                style={[styles.btnOutline, { borderColor: COLORS.success, backgroundColor: COLORS.success }]} 
-                onPress={() => handleAction('status', 'Work in progress')}
-                disabled={loading}>
-                <Clock size={18} color="#fff" />
-                <Text style={[styles.btnOutlineText, {color: '#fff'}]}>Arrived - Mark In Progress</Text>
-            </TouchableOpacity>
+             <View style={[styles.btnOutline, { borderColor: COLORS.primary, backgroundColor: 'rgba(59, 130, 246, 0.05)' }]}>
+                <Navigation size={18} color={COLORS.primary} />
+                <Text style={styles.btnOutlineText}>Live Navigation Active</Text>
+             </View>
+             <Text style={styles.autoHint}>Status will automatically update to "At Site" once you are within 10m of the trash.</Text>
           </View>
 
             {isEscalated() && (
@@ -412,6 +423,13 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#fff',
     zIndex: 10,
+  },
+  autoHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
+    fontStyle: 'italic',
   },
   heroChatBtn: {
     position: 'absolute',

@@ -74,18 +74,20 @@ export default function AnalyticsPage() {
               PEAK: {Math.max(...formattedHourly.map(h => h.volume))} r/h
             </span>
           </div>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={formattedHourly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="time" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
-                />
-                <Line type="monotone" dataKey="volume" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#18181b' }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="h-[300px] overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <div style={{ minWidth: Math.max(formattedHourly.length * 60, 500), height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={formattedHourly}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis dataKey="time" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+                  />
+                  <Line type="monotone" dataKey="volume" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#18181b' }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </motion.div>
 
@@ -134,22 +136,24 @@ export default function AnalyticsPage() {
                REAL-TIME PERFORMANCE BY WARD
             </div>
           </div>
-          <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={formattedWardRes}>
-                <defs>
-                   <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                   </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
-                <Area type="monotone" dataKey="time" stroke="#f59e0b" fillOpacity={1} fill="url(#colorTime)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[350px] overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <div style={{ minWidth: Math.max(formattedWardRes.length * 80, 800), height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={formattedWardRes}>
+                  <defs>
+                    <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                  <Area type="monotone" dataKey="time" stroke="#f59e0b" fillOpacity={1} fill="url(#colorTime)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </motion.div>
 

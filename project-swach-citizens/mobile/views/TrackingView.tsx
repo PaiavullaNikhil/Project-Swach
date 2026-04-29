@@ -21,6 +21,11 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
   const [socket, setSocket] = useState<any>(null);
   const mapRef = React.useRef<MapView | null>(null);
 
+  // Sync state when props change
+  useEffect(() => {
+    setComplaint(initialComplaint);
+  }, [initialComplaint._id]);
+
   // Sync data with backend
   const refreshData = async () => {
     try {
@@ -94,8 +99,57 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
     { id: 'Cleared', label: 'Issue Resolved', icon: CheckCircle, color: COLORS.primary },
   ];
 
-  const currentStepIndex = steps.findIndex(s => s.id === (complaint.status === 'Cleared' ? 'Cleared' : complaint.worker_status || 'Reported'));
-  
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000; // Radius of the earth in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const isWorkerAtSite = () => {
+    if (complaint.worker_status === 'Work in progress') return true;
+    if (!complaint.worker_location) return false;
+    
+    const dist = getDistance(
+        complaint.worker_location.coordinates[1], complaint.worker_location.coordinates[0],
+        complaint.location.coordinates[1], complaint.location.coordinates[0]
+    );
+    return dist <= 15; // 15m threshold for better visibility in UI
+  };
+
+  const getStepId = () => {
+    if (complaint.status === 'Cleared') return 'Cleared';
+    
+    // Safety: If no worker is assigned, it must be in Reported state regardless of other flags
+    if (!complaint.worker_id) return 'Reported';
+
+    // Transit/Active phase requirements:
+    // 1. Must have a worker
+    // 2. Must be in a transit/work status
+    // 3. For 'On the way', MUST have a visible worker_location to justify "In Transit" highlight
+    const workerAtSite = isWorkerAtSite();
+
+    if (complaint.worker_status === 'Work in progress' || workerAtSite) return 'On the way'; 
+    
+    if ((complaint.worker_status === 'On the way' || complaint.status === 'On the way') && complaint.worker_location) {
+        return 'On the way';
+    }
+        
+    if (complaint.worker_status === 'Assigned' || 
+        complaint.status === 'Assigned' || 
+        (complaint.worker_status === 'On the way' && !complaint.worker_location)) {
+        return 'Assigned';
+    }
+        
+    return 'Reported';
+  };
+
+  const currentStepIndex = steps.findIndex(s => s.id === getStepId());
+
   const renderTimeline = () => (
     <View style={styles.timelineContainer}>
       {steps.map((step, index) => {
@@ -103,6 +157,7 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
         const isActive = index === currentStepIndex;
         const isLast = index === steps.length - 1;
         const Icon = step.icon;
+        const workerArrived = isWorkerAtSite();
 
         return (
           <View key={step.id} style={styles.timelineItem}>
@@ -121,8 +176,21 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
             </View>
             <View style={styles.timelineRight}>
                 <Text style={[styles.timelineLabel, isCompleted && { color: COLORS.text, fontWeight: '800' }]}>{step.label}</Text>
-                {isActive && (
-                    <Text style={[styles.timelineStatus, { color: step.color }]}>Live Tracking Active</Text>
+                
+                {isActive && step.id === 'On the way' && (
+                    <Text style={[styles.timelineStatus, { color: step.color }]}>
+                        {workerArrived ? 'Worker at Site • Cleanup in Progress' : 'Live Tracking Active • In Transit'}
+                    </Text>
+                )}
+                
+                {isActive && step.id === 'Assigned' && (
+                    <Text style={[styles.timelineStatus, { color: step.color }]}>
+                        {workerArrived ? 'Worker at Site • Cleanup in Progress' : 'Awaiting Worker Dispatch'}
+                    </Text>
+                )}
+                
+                {isActive && step.id === 'Reported' && (
+                    <Text style={[styles.timelineStatus, { color: step.color }]}>Awaiting Verification</Text>
                 )}
             </View>
           </View>
@@ -165,7 +233,8 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
                     <Image source={require('../assets/trash.png')} style={{ width: 40, height: 40 }} />
                 </Marker>
 
-                {complaint.worker_location && complaint.status !== 'Cleared' && (
+                {complaint.worker_location && 
+                 (complaint.worker_status === 'On the way' || complaint.status === 'On the way') && (
                     <Marker 
                         coordinate={{ 
                             latitude: complaint.worker_location.coordinates[1], 
@@ -187,10 +256,12 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
         <View style={styles.card}>
             <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Resolution Progress</Text>
-                <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveText}>LIVE</Text>
-                </View>
+                {(complaint.worker_status === 'On the way' || complaint.status === 'On the way') && (
+                    <View style={styles.liveBadge}>
+                        <View style={styles.liveDot} />
+                        <Text style={styles.liveText}>LIVE</Text>
+                    </View>
+                )}
             </View>
             {renderTimeline()}
         </View>

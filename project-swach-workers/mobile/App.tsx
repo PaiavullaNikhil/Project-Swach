@@ -185,9 +185,14 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         
-        {/* Simple Header */}
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Swach Worker</Text>
+          <View>
+            <Text style={styles.headerTitle}>Swach Worker</Text>
+            {worker && (
+              <Text style={styles.welcomeText}>Welcome, {worker.name}</Text>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             {loading && <ActivityIndicator color="#fff" size="small" />}
             {worker && (
@@ -248,6 +253,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', alignItems: 'center' 
   },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  welcomeText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: -2 },
   logoutBtn: { 
     backgroundColor: '#fff', 
     width: 36, 

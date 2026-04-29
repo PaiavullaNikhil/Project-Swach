@@ -6,34 +6,53 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db("swach_db");
 
-    // 1. Daily Trend Aggregation (Last 7 Days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const dailyTrends = await db.collection("complaints").aggregate([
+    // 1. Daily Trend Aggregation (Complaints by Report Date)
+    const complaintTrend = await db.collection("complaints").aggregate([
       {
         $addFields: {
           tsDate: { $toDate: "$timestamp" }
         }
       },
-      { $match: { tsDate: { $gte: sevenDaysAgo } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$tsDate" } },
-          complaints: { $sum: 1 },
-          resolved: { $sum: { $cond: [{ $eq: ["$status", "Cleared"] }, 1, 0] } }
-        }
-      },
-      { $sort: { _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          name: "$_id",
-          complaints: 1,
-          resolved: 1
+          complaints: { $sum: 1 }
         }
       }
     ]).toArray();
+
+    // 2. Daily Trend Aggregation (Resolutions by Cleared Date)
+    const resolutionTrend = await db.collection("complaints").aggregate([
+      { $match: { status: "Cleared", cleared_timestamp: { $ne: null } } },
+      {
+        $addFields: {
+          clDate: { $toDate: "$cleared_timestamp" }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$clDate" } },
+          resolved: { $sum: 1 }
+        }
+      }
+    ]).toArray();
+
+    // 3. Merge Trends by Date
+    const trendMap: Record<string, { name: string, complaints: number, resolved: number }> = {};
+    
+    complaintTrend.forEach(item => {
+      trendMap[item._id] = { name: item._id, complaints: item.complaints, resolved: 0 };
+    });
+    
+    resolutionTrend.forEach(item => {
+      if (trendMap[item._id]) {
+        trendMap[item._id].resolved = item.resolved;
+      } else {
+        trendMap[item._id] = { name: item._id, complaints: 0, resolved: item.resolved };
+      }
+    });
+
+    const dailyTrends = Object.values(trendMap).sort((a, b) => a.name.localeCompare(b.name));
 
     // 2. Hourly Volume (Reports by hour of the day)
     const hourlyStats = await db.collection("complaints").aggregate([

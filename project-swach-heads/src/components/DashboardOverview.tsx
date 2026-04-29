@@ -92,30 +92,30 @@ export default function DashboardOverview() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Charts Area */}
-        <div className="lg:col-span-2 space-y-8">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass rounded-2xl p-6"
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold">Complaint vs Resolution Trends</h3>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="w-3 h-3 rounded-full bg-primary"></div> Reported
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div> Resolved
-                </div>
+        {/* Row 1: Trend Analysis and Category Distribution */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:col-span-2 glass rounded-2xl p-6"
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold">Complaint vs Resolution Trends</h3>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="w-3 h-3 rounded-full bg-primary"></div> Reported
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div> Resolved
               </div>
             </div>
-            <div className="h-[300px]">
-              {loading ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Loading trend data...</div>
-              ) : trends.length === 0 || trends.every(t => t.complaints === 0 && t.resolved === 0) ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No trend data available for the last 7 days</div>
-              ) : (
+          </div>
+          <div className="h-[300px] overflow-x-auto overflow-y-hidden custom-scrollbar">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Loading trend data...</div>
+            ) : trends.length === 0 || trends.every(t => t.complaints === 0 && t.resolved === 0) ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No trend data available</div>
+            ) : (
+              <div style={{ minWidth: Math.max(trends.length * 60, 600), height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trends}>
                     <defs>
@@ -139,29 +139,88 @@ export default function DashboardOverview() {
                     <Area type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorResolved)" />
                   </AreaChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-          </motion.div>
+              </div>
+            )}
+          </div>
+        </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="glass rounded-2xl p-6"
-          >
-            <h3 className="text-lg font-bold mb-6">Ward-wise Performance</h3>
-            <div className="h-[300px]">
-              {loading ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Loading performance data...</div>
-              ) : wardData.length === 0 ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No ward performance data available</div>
-              ) : (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="lg:col-span-1 glass rounded-2xl p-6 h-full flex flex-col"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <PieIcon className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-bold">Category Distribution</h3>
+          </div>
+          <div className="flex-1 relative min-h-[250px]">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Analyzing categories...</div>
+            ) : categoryData.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No category data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4 border-t border-white/5 pt-4">
+            {categoryData.slice(0, 4).map((entry: any, index) => (
+              <div key={entry.name} className="flex items-center gap-2 text-[10px]">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                <span className="text-muted-foreground truncate">{entry.name}</span>
+                <span className="font-bold ml-auto">{entry.value}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Row 2: Ward Performance and Priority Feed */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="lg:col-span-2 glass rounded-2xl p-6 h-full flex flex-col"
+        >
+          <h3 className="text-lg font-bold mb-6">Ward-wise Performance</h3>
+          <div className="flex-1 min-h-[300px] overflow-x-auto overflow-y-hidden custom-scrollbar pb-2">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Loading performance data...</div>
+            ) : wardData.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No ward performance data available</div>
+            ) : (
+              <div style={{ minWidth: Math.max(wardData.length * 150, 800), height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={wardData}>
+                  <BarChart data={wardData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                    <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="#71717a" 
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false}
+                      dy={10}
+                    />
+                    <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip 
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
@@ -183,65 +242,16 @@ export default function DashboardOverview() {
                         return null;
                       }}
                     />
-                    <Bar dataKey="cleared" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="active" fill="#27272a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="cleared" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={72} />
+                    <Bar dataKey="active" fill="#27272a" radius={[4, 4, 0, 0]} barSize={72} />
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-          </motion.div>
-        </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
 
-        {/* Sidebar Analytics Area */}
-        <div className="lg:col-span-1 space-y-8">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass rounded-2xl p-6"
-          >
-            <div className="flex items-center gap-2 mb-6">
-              <PieIcon className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-bold">Category Distribution</h3>
-            </div>
-            <div className="h-[250px] relative">
-              {loading ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Analyzing categories...</div>
-              ) : categoryData.length === 0 ? (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm italic">No category data</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {categoryData.map((entry: any, index) => (
-                <div key={entry.name} className="flex items-center gap-2 text-[10px]">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                  <span className="text-muted-foreground truncate">{entry.name}</span>
-                  <span className="font-bold ml-auto">{entry.value}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
+        <div className="lg:col-span-1">
           <PriorityFeed />
         </div>
       </div>

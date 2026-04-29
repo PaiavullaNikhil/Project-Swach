@@ -104,10 +104,34 @@ export default function App() {
 
     initializeApp();
 
+    // Handle hardware back button
+    const { BackHandler } = require('react-native');
+    const backAction = () => {
+      if (activeTab === 'tracking' || activeTab === 'report') {
+        setActiveTab(previousTab);
+        return true;
+      }
+      if (activeTab === 'map') {
+        setActiveTab('feed');
+        return true;
+      }
+      if (activeTab === 'feed') {
+         Alert.alert("Exit App", "Are you sure you want to exit?", [
+           { text: "Cancel", onPress: () => null, style: "cancel" },
+           { text: "YES", onPress: () => BackHandler.exitApp() }
+         ]);
+         return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
+
     return () => {
       newSocket.close();
+      backHandler.remove();
     };
-  }, []);
+  }, [activeTab, previousTab]);
 
   const handleReportSuccess = async (pointsWon: number) => {
     try {
@@ -154,7 +178,8 @@ export default function App() {
           {activeTab === 'welcome' && (
               <WelcomeView onGetStarted={() => setActiveTab('feed')} />
           )}
-          {activeTab === 'feed' && (
+          
+          <View style={{ display: activeTab === 'feed' ? 'flex' : 'none', flex: 1 }}>
               <FeedView 
                   complaints={complaints} 
                   loading={loading} 
@@ -166,8 +191,9 @@ export default function App() {
                     setActiveTab('tracking');
                   }}
               />
-          )}
-          {activeTab === 'map' && (
+          </View>
+
+          <View style={{ display: activeTab === 'map' ? 'flex' : 'none', flex: 1 }}>
               <MapView 
                   complaints={complaints} 
                   loading={loading} 
@@ -177,7 +203,8 @@ export default function App() {
                     setActiveTab('tracking');
                   }}
               />
-          )}
+          </View>
+
           {activeTab === 'report' && (
               <ReportView 
                   onCancel={() => setActiveTab(previousTab)} 
@@ -186,6 +213,7 @@ export default function App() {
                   userHash={userHash}
               />
           )}
+
           {activeTab === 'tracking' && selectedComplaint && (
               <TrackingView
                   complaint={selectedComplaint}

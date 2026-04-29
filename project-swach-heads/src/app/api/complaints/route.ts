@@ -60,7 +60,10 @@ export async function PATCH(request: Request) {
           status: "Assigned",
           worker_status: "Assigned",
           assigned_at: new Date()
-        } 
+        },
+        $unset: {
+          worker_location: ""
+        }
       }
     );
 
