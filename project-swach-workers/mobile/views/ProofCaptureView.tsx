@@ -27,6 +27,11 @@ export default function ProofCaptureView({ task, workerHash, onCancel, onSuccess
     }
   }, [permission]);
 
+  const isEscalated = () => {
+    const ageHours = (new Date().getTime() - new Date(task.timestamp).getTime()) / (1000 * 60 * 60);
+    return ageHours >= 72;
+  };
+
   const takePicture = async () => {
     if (cameraRef.current) {
       setLoading(true);
@@ -103,14 +108,14 @@ export default function ProofCaptureView({ task, workerHash, onCancel, onSuccess
                   {loading ? <ActivityIndicator color="#fff" /> : <Camera size={32} color="#fff" />}
                 </TouchableOpacity>
                 
-{/* 
-                <TouchableOpacity 
-                  style={styles.chatBtn} 
-                  onPress={() => setIsChatVisible(true)}
-                >
-                  <MessageSquare size={24} color="#fff" />
-                </TouchableOpacity>
-*/}
+                {isEscalated() && (
+                  <TouchableOpacity 
+                    style={styles.chatBtn} 
+                    onPress={() => setIsChatVisible(true)}
+                  >
+                    <MessageSquare size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
               </View>
           </View>
         </>
