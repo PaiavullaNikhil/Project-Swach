@@ -8,30 +8,50 @@ export default function ReportsPage() {
   const [stats, setStats] = useState<any>(null);
   const [complaints, setComplaints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("All");
 
   useEffect(() => {
-    // Fetch stats
+    // Fetch stats once
     fetch("/api/stats")
       .then(res => res.json())
       .then(data => {
         setStats(data);
       })
       .catch(err => console.error("Error fetching stats:", err));
+  }, []);
 
+  useEffect(() => {
     // Fetch actual complaints for the "Archive/Log" table
-    fetch("/api/complaints")
+    setTableLoading(true);
+    const url = statusFilter === "All" ? "/api/complaints" : `/api/complaints?status=${statusFilter}`;
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setComplaints(data.slice(0, 10)); // Show latest 10
+          setComplaints(data.slice(0, 10)); // Show latest 10 of this status
         }
+        setTableLoading(false);
         setLoading(false);
       })
       .catch(err => {
         console.error("Error fetching complaints:", err);
+        setTableLoading(false);
         setLoading(false);
       });
-  }, []);
+  }, [statusFilter]);
+
+  const getResolutionData = (reportDate: string, clearedDate: string) => {
+    if (!reportDate || !clearedDate) return null;
+    const start = new Date(reportDate);
+    const end = new Date(clearedDate);
+    const diffInMs = end.getTime() - start.getTime();
+    const h = diffInMs / (1000 * 60 * 60);
+    return {
+      hours: h.toFixed(1),
+      days: h >= 24 ? (h / 24).toFixed(1) : null
+    };
+  };
 
   const formatRelativeTime = (date: string) => {
     const now = new Date();
@@ -106,9 +126,17 @@ export default function ReportsPage() {
 
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Efficiency</p>
-            <p className="text-5xl font-black text-amber-400">
-              {stats?.workers?.avgResponse || "0m"}
-            </p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-5xl font-black text-amber-400">
+                {stats?.workers?.avgResponseHours || "0"}
+                <span className="text-lg font-bold ml-1">h</span>
+              </p>
+              {stats?.workers?.avgResponseDays && (
+                <span className="text-sm font-bold text-amber-400/50 bg-amber-400/10 px-2 py-0.5 rounded-md">
+                   {stats.workers.avgResponseDays}d
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
                <Clock className="w-3.5 h-3.5" />
                Avg Resolution Time
@@ -129,12 +157,26 @@ export default function ReportsPage() {
 
       {/* Actual Data Table */}
       <div className="space-y-6 print:hidden">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
            <h3 className="text-xl font-bold flex items-center gap-2">
              <FileText className="w-5 h-5 text-primary" />
              Recent System Activity
            </h3>
-           <span className="text-xs text-muted-foreground">Synchronized with Main Database</span>
+           <div className="flex flex-wrap gap-2">
+             {["All", "Reported", "Assigned", "Work in progress", "Cleared"].map((s) => (
+               <button
+                 key={s}
+                 onClick={() => setStatusFilter(s)}
+                 className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                   statusFilter === s 
+                   ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                   : 'bg-white/5 text-muted-foreground border-white/10 hover:bg-white/10'
+                 }`}
+               >
+                 {s}
+               </button>
+             ))}
+           </div>
         </div>
 
         <div className="glass rounded-[2rem] overflow-hidden border-white/5">
@@ -174,21 +216,38 @@ export default function ReportsPage() {
                     {formatRelativeTime(c.timestamp)}
                   </td>
                   <td className="px-8 py-6 text-center">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                      c.status === 'Cleared' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
-                      c.status === 'Work in progress' || c.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                      c.status === 'Assigned' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                      'bg-red-500/10 text-red-500 border-red-500/20'
-                    }`}>
-                      {c.status || "Reported"}
-                    </span>
+                    {(() => {
+                      const resData = getResolutionData(c.timestamp, c.cleared_timestamp);
+                      return (
+                        <span className={`px-3 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border flex flex-col items-center leading-tight ${
+                          c.status === 'Cleared' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                          c.status === 'Work in progress' || c.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                          c.status === 'Assigned' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                          'bg-red-500/10 text-red-500 border-red-500/20'
+                        }`}>
+                          <span>{c.status || "Reported"}</span>
+                          {c.status === 'Cleared' && resData && (
+                            <span className="text-[7px] opacity-60 font-bold tracking-normal mt-0.5 pt-0.5 border-t border-emerald-500/20 w-full">
+                              {resData.hours}h {resData.days && `• ${resData.days}d`}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
-              {complaints.length === 0 && (
+              {complaints.length === 0 && !tableLoading && (
                 <tr>
                   <td colSpan={4} className="px-8 py-20 text-center text-muted-foreground italic">
-                    No records found in the database.
+                    No {statusFilter !== "All" ? statusFilter.toLowerCase() : ""} records found in the database.
+                  </td>
+                </tr>
+              )}
+              {tableLoading && (
+                <tr>
+                  <td colSpan={4} className="px-8 py-20 text-center text-muted-foreground italic animate-pulse">
+                    Filtering records...
                   </td>
                 </tr>
               )}

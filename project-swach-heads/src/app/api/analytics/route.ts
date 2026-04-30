@@ -125,26 +125,44 @@ export async function GET() {
 
     // 5. Ward-wise Best Workers
     const bestWorkers = await db.collection("complaints").aggregate([
-      { $match: { status: "Cleared", worker_id: { $ne: null } } },
+      { $match: { status: "Cleared", worker_id: { $ne: null }, cleared_timestamp: { $ne: null } } },
+      {
+        $addFields: {
+          tsDate: { $toDate: "$timestamp" },
+          clearedDate: { $toDate: "$cleared_timestamp" }
+        }
+      },
       {
         $group: {
           _id: { ward: "$ward", worker_id: "$worker_id", worker_name: "$worker_name" },
-          completions: { $sum: 1 }
+          completions: { $sum: 1 },
+          totalTime: { $sum: { $subtract: ["$clearedDate", "$tsDate"] } }
         }
       },
-      { $sort: { completions: -1 } },
+      {
+        $project: {
+          ward: "$_id.ward",
+          name: "$_id.worker_name",
+          reports: "$completions",
+          avgTime: { $divide: ["$totalTime", { $multiply: ["$completions", 3600000] }] }, // Avg in hours
+          rating: { $literal: "99%" }
+        }
+      },
+      { $sort: { reports: -1 } },
       {
         $group: {
-          _id: "$_id.ward",
+          _id: "$ward",
           bestWorker: { $first: "$$ROOT" }
         }
       },
       {
         $project: {
+          _id: 0,
           ward: "$_id",
-          name: "$bestWorker._id.worker_name",
-          reports: "$bestWorker.completions",
-          rating: { $literal: "99%" } // Placeholder for rating if not available
+          name: "$bestWorker.name",
+          reports: "$bestWorker.reports",
+          avgTime: "$bestWorker.avgTime",
+          rating: "$bestWorker.rating"
         }
       }
     ]).toArray();

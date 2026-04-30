@@ -45,7 +45,7 @@ export async function GET() {
       }
     ]).toArray();
 
-    const avgMinutes = avgRes.length > 0 ? Math.round(avgRes[0].avgDuration / (1000 * 60)) : 0;
+    const avgHours = avgRes.length > 0 ? (avgRes[0].avgDuration / (1000 * 60 * 60)) : 0;
 
     return NextResponse.json({
       total,
@@ -55,7 +55,8 @@ export async function GET() {
       workers: {
         total: totalWorkers,
         active: activeWorkers,
-        avgResponse: `${avgMinutes}m`
+        avgResponseHours: avgHours.toFixed(1),
+        avgResponseDays: avgHours >= 24 ? (avgHours / 24).toFixed(1) : null
       }
     });
   } catch (e) {

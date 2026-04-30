@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell 
 } from "recharts";
-import { TrendingUp, Award, Clock, ArrowUpRight, Loader2 } from "lucide-react";
+import { TrendingUp, Award, Clock, ArrowUpRight, Loader2, Search } from "lucide-react";
 import { motion } from "framer-motion";
 
 const COLORS = ['#3b82f6', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899'];
@@ -13,6 +13,7 @@ const COLORS = ['#3b82f6', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899'
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetch("/api/analytics")
@@ -50,8 +51,13 @@ export default function AnalyticsPage() {
   // Format ward data for area chart
   const formattedWardRes = analytics.wardPerformance?.map((w: any) => ({
     name: w.name || "Unknown",
-    time: Math.round(w.avgResolutionTime || 0)
+    time: Number((w.avgResolutionTime || 0).toFixed(1))
   })) || [];
+
+  const filteredWorkers = analytics.bestWorkers?.filter((w: any) => 
+    w.ward?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    w.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   return (
     <div className="space-y-8 pb-12">
@@ -159,12 +165,21 @@ export default function AnalyticsPage() {
 
         {/* Best Workers Table */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass p-6 rounded-3xl lg:col-span-2">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <h3 className="text-lg font-bold flex items-center gap-2">
                <Award className="w-5 h-5 text-green-500" />
                Ward-wise Best Workers
             </h3>
-            <button className="text-xs text-primary font-bold hover:underline">FULL LOGS</button>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Search ward or worker..." 
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -173,12 +188,12 @@ export default function AnalyticsPage() {
                   <th className="pb-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ward</th>
                   <th className="pb-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lead Worker</th>
                   <th className="pb-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Completions</th>
-                  <th className="pb-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Efficiency</th>
+                  <th className="pb-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Time (Hrs)</th>
                   <th className="pb-4 text-right"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {analytics.bestWorkers?.map((w: any, i: number) => (
+                {filteredWorkers.map((w: any, i: number) => (
                   <tr key={w.ward} className="group hover:bg-white/5 transition-colors">
                     <td className="py-4">
                       <span className="text-sm font-medium">{w.ward}</span>
@@ -191,8 +206,8 @@ export default function AnalyticsPage() {
                     </td>
                     <td className="py-4 text-sm font-bold">{w.reports}</td>
                     <td className="py-4 text-sm text-green-500 font-bold whitespace-nowrap">
-                       <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />
-                       {w.rating}
+                       <Clock className="inline-block w-3 h-3 mr-2 text-amber-500" />
+                       {w.avgTime ? w.avgTime.toFixed(1) : "0.0"} hrs
                     </td>
                     <td className="py-4 text-right">
                        <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors inline" />
