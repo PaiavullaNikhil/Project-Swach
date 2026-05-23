@@ -20,6 +20,7 @@ class Complaint(Document):
     constituency: Optional[str] = None
     mla: Optional[str] = None
     reporter_hash: str
+    category: str = "General"
     points_awarded: bool = False
     
     # Worker Section
@@ -88,3 +89,19 @@ class ChatMessage(Document):
 
     class Settings:
         name = "chat_messages"
+
+class TokenWallet(Document):
+    user_hash: str
+    balance: int = 0
+
+    class Settings:
+        name = "token_wallets"
+
+class Voucher(Document):
+    title: str
+    description: str
+    cost: int
+    is_active: bool = True
+
+    class Settings:
+        name = "vouchers"

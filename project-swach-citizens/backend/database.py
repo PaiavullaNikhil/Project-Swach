@@ -1,5 +1,6 @@
+import os
 from beanie import init_beanie
-from models import Complaint, Worker, Vehicle
+from models import Complaint, GeoJSONPoint, TokenWallet, Voucher
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,17 +16,26 @@ class Settings(BaseSettings):
     # AI
     gemini_api_key: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(__file__), ".env"), 
+        extra="ignore"
+    )
 
 
 settings = Settings()
 
 
 async def init_db():
-    # Let Beanie create its own client internally via connection_string.
-    # The database name must be in the URI path for get_default_database() to work.
-    uri = settings.mongodb_uri.rstrip("/") + "/" + settings.database_name
+    base_uri = settings.mongodb_uri.split("?")[0].rstrip("/")
+    if not base_uri.endswith(settings.database_name):
+        uri = f"{base_uri}/{settings.database_name}"
+        if "?" in settings.mongodb_uri:
+            uri += "?" + settings.mongodb_uri.split("?")[1]
+    else:
+        uri = settings.mongodb_uri
+    print(f"DEBUG: Initializing database connection to: {uri.split('@')[-1] if '@' in uri else uri}")
     await init_beanie(
         connection_string=uri,
-        document_models=[Complaint, Worker, Vehicle],
+        document_models=[Complaint, TokenWallet, Voucher],
     )
+    print("DEBUG: Database initialized successfully.")

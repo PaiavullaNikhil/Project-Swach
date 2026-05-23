@@ -1,8 +1,7 @@
 import os
 from beanie import init_beanie
-from models import Complaint, Worker, Vehicle, ChatMessage
+from models import Complaint, Worker, Vehicle, ChatMessage, TokenWallet, Voucher
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017/swach_db"
@@ -37,6 +36,6 @@ async def init_db():
     print(f"DEBUG: Initializing database connection to: {uri.split('@')[-1] if '@' in uri else uri}")
     await init_beanie(
         connection_string=uri,
-        document_models=[Complaint, Worker, Vehicle, ChatMessage],
+        document_models=[Complaint, Worker, Vehicle, ChatMessage, TokenWallet, Voucher],
     )
     print("DEBUG: Database initialized successfully.")

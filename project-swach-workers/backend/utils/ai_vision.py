@@ -22,14 +22,21 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
             image_data = f.read()
 
         prompt = """
-        You are a highly sensitive trash detection AI.
+        You are a highly sensitive trash detection and classification AI.
         Look closely at the image. Is there ANY form of garbage, waste, litter, plastic, debris, swept piles, or overflowing trash bins?
-        Even a small amount of visible litter should be counted as waste!
         
+        If trash is visible, classify it into ONE of these categories:
+        1. Plastic (Plastic bags, bottles, wrappers)
+        2. Organic (Food waste, leaves, natural debris)
+        3. Debris (Construction waste, stones, cement, large metal)
+        4. Hazardous (Chemicals, sharp objects, medical waste)
+        5. Carcass (Dead animals - extremely urgent)
+        6. General (Anything else or a mix of above)
+
         Format your response exactly like this:
-        YES - [Brief reason what trash is visible]
-        or
-        NO - [Brief reason why it looks completely clean]
+        RESULT: YES (or NO)
+        CATEGORY: [Category Name]
+        REASON: [Brief explanation]
         """
 
         response = client.models.generate_content(
@@ -40,14 +47,27 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
             ]
         )
         
-        raw_text = response.text.strip()
+        raw_text = response.text.strip().upper()
         print(f"AI Pipeline Response: {raw_text}") # For backend debugging
         
-        # Look for YES in the first few characters to handle any markdown like **YES**
-        is_valid = "YES" in raw_text[:15].upper()
+        # Look for YES to handle markdown
+        is_valid = "RESULT: YES" in raw_text or "RESULT: **YES" in raw_text
+        
+        # Robustly parse category
+        category = "General"
+        categories = ["PLASTIC", "ORGANIC", "DEBRIS", "HAZARDOUS", "CARCASS", "GENERAL"]
+        for cat in categories:
+            if cat in raw_text: # broad match since it's upper case
+                # To avoid false matches in reasoning, ensure it's near 'CATEGORY'
+                if "CATEGORY:" in raw_text or "CATEGORY**:" in raw_text:
+                    cat_idx = raw_text.find("CATEGORY")
+                    if cat in raw_text[cat_idx:cat_idx+30]:
+                        category = cat.capitalize()
+                        break
 
         return {
             "valid": is_valid,
+            "category": category,
             "confidence": 1.0 if is_valid else 0.0,
             "reason": raw_text
         }
