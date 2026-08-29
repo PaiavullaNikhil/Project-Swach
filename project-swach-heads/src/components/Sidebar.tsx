@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Map, BarChart2, Users, AlertCircle, FileText, LogOut, Truck } from "lucide-react";
+import { Home, Map, BarChart2, Users, AlertCircle, FileText, LogOut, Truck, Brain } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
@@ -13,6 +13,7 @@ function cn(...inputs: ClassValue[]) {
 const navItems = [
   { name: "Overview", icon: Home, href: "/" },
   { name: "Live Map", icon: Map, href: "/map" },
+  { name: "Swachh AI", icon: Brain, href: "/swachh-ai" },
   { name: "Analytics", icon: BarChart2, href: "/analytics" },
   { name: "Workers", icon: Users, href: "/workers" },
   { name: "Vehicles", icon: Truck, href: "/vehicles" },

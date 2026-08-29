@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, StatusBar, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, StatusBar, Alert, Keyboard } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Map as MapIcon, List, Plus } from 'lucide-react-native';
+import { Map as MapIcon, List, Plus, Gift, Bot } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import axios from 'axios';
@@ -14,9 +14,11 @@ import FeedView from './views/FeedView';
 import MapView from './views/MapView';
 import ReportView from './views/ReportView';
 import TrackingView from './views/TrackingView';
+import RewardsView from './views/RewardsView';
+import ChatBotView from './views/ChatBotView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'welcome' | 'feed' | 'map' | 'report' | 'tracking'>('welcome');
+  const [activeTab, setActiveTab] = useState<'welcome' | 'feed' | 'map' | 'report' | 'tracking' | 'rewards' | 'chat'>('welcome');
   const [previousTab, setPreviousTab] = useState<'feed' | 'map'>('feed');
   const [selectedComplaint, setSelectedComplaint] = useState<any | null>(null);
   const [userHash, setUserHash] = useState<string | null>(null);
@@ -25,6 +27,7 @@ export default function App() {
   const [complaints, setComplaints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState<any>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   const fetchComplaints = async () => {
     try {
@@ -49,9 +52,16 @@ export default function App() {
       }
       setUserHash(hash);
 
-      // 2. Get User Points
-      const points = await AsyncStorage.getItem('userPoints');
-      setUserPoints(points ? parseInt(points) : 0);
+      // 2. Sync User Points with backend
+      try {
+        const walletRes = await axios.get(`${API_URL}/wallet/${hash}`);
+        setUserPoints(walletRes.data.balance);
+        await AsyncStorage.setItem('userPoints', walletRes.data.balance.toString());
+      } catch (e) {
+        console.log("Wallet sync failed, using local points", e);
+        const points = await AsyncStorage.getItem('userPoints');
+        setUserPoints(points ? parseInt(points) : 0);
+      }
 
       // 3. Request Location (Flash Fast + Precise Fallback)
       try {
@@ -88,6 +98,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Keyboard listeners
+    const kbShow = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const kbHide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
     // Initialize Socket
     const newSocket = io(SOCKET_URL, {
       path: '/ws/socket.io',
@@ -130,6 +144,8 @@ export default function App() {
     return () => {
       newSocket.close();
       backHandler.remove();
+      kbShow.remove();
+      kbHide.remove();
     };
   }, [activeTab, previousTab]);
 
@@ -205,6 +221,14 @@ export default function App() {
               />
           </View>
 
+          {activeTab === 'chat' && (
+              <ChatBotView isKeyboardVisible={isKeyboardVisible} userHash={userHash} />
+          )}
+
+          {activeTab === 'rewards' && (
+              <RewardsView userHash={userHash} balance={userPoints} setBalance={setUserPoints} />
+          )}
+
           {activeTab === 'report' && (
               <ReportView 
                   onCancel={() => setActiveTab(previousTab)} 
@@ -223,20 +247,30 @@ export default function App() {
         </View>
 
         {/* Bottom Navigation */}
-        {activeTab !== 'welcome' && activeTab !== 'report' && activeTab !== 'tracking' && (
+        {activeTab !== 'welcome' && activeTab !== 'report' && activeTab !== 'tracking' && !isKeyboardVisible && (
           <View style={styles.navBarWrapper}>
             <View style={styles.navBarContainer}>
               <BlurView intensity={90} tint="light" style={styles.navBar}>
                 <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('feed')}>
-                  <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={26} />
+                  <List color={activeTab === 'feed' ? COLORS.primary : COLORS.textMuted} size={24} />
                   <Text style={[styles.navText, activeTab === 'feed' && styles.navTextActive]}>Feed</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
+                  <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={24} />
+                  <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
                 </TouchableOpacity>
 
                 <View style={styles.navItemPlaceholder} />
 
-                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('map')}>
-                  <MapIcon color={activeTab === 'map' ? COLORS.primary : COLORS.textMuted} size={26} />
-                  <Text style={[styles.navText, activeTab === 'map' && styles.navTextActive]}>Map</Text>
+                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('chat')}>
+                  <Bot color={activeTab === 'chat' ? COLORS.primary : COLORS.textMuted} size={24} />
+                  <Text style={[styles.navText, activeTab === 'chat' && styles.navTextActive]}>Chat</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('rewards')}>
+                  <Gift color={activeTab === 'rewards' ? COLORS.primary : COLORS.textMuted} size={24} />
+                  <Text style={[styles.navText, activeTab === 'rewards' && styles.navTextActive]}>Rewards</Text>
                 </TouchableOpacity>
               </BlurView>
             </View>

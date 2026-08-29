@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Alert, Dim
 import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2, MessageSquare } from 'lucide-react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import axios from 'axios';
 import { COLORS, API_URL } from '../constants/theme';
 import ChatModal from '../components/ChatModal';
@@ -23,6 +25,9 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
   const [routeDistance, setRouteDistance] = useState<number | null>(null); // in meters
   const [routeDuration, setRouteDuration] = useState<number | null>(null); // in seconds
   const [isChatVisible, setIsChatVisible] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
   const lastRouteFetchRef = React.useRef<{lat: number; lon: number} | null>(null);
   const mapRef = React.useRef<MapView | null>(null);
 
@@ -202,6 +207,68 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
     }
   };
 
+  const startRecording = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (perm.status === 'granted') {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        setRecording(recording);
+        setIsRecording(true);
+      }
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    setIsRecording(false);
+    if (!recording) return;
+    setVoiceLoading(true);
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        const formData = new FormData();
+        formData.append('complaint_id', task._id);
+        
+        // Infer type from URI
+        const fileType = uri.split('.').pop();
+        const mimeType = fileType === 'm4a' ? 'audio/m4a' : 'audio/mp4';
+
+        formData.append('audio', {
+          uri,
+          name: `audio.${fileType}`,
+          type: mimeType,
+        } as any);
+
+        const response = await axios.post(`${API_URL}/worker/voice-command`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        if (response.data.reply) {
+          const reply = response.data.reply;
+          // Play TTS in Kannada
+          Speech.speak(reply, { language: 'kn-IN' });
+          Alert.alert("Voice AI (Kannada)", reply);
+        }
+      }
+    } catch (err) {
+      console.error('Recording stopped/upload error', err);
+      Alert.alert("Error", "Could not process voice command.");
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
   const isAssignedToMe = task.worker_id === workerHash;
   const isAssignedToOther = task.worker_id && task.worker_id !== workerHash;
 
@@ -347,6 +414,23 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
                           <Text style={styles.btnText}>Complete & Verify</Text>
                       </TouchableOpacity>
                     ) : null
+                  )}
+
+                  {/* Voice Assistant Button (Kannada) */}
+                  {task.worker_status === 'Work in progress' && (
+                    <TouchableOpacity 
+                        style={[
+                          styles.btnOutline, 
+                          { borderColor: isRecording ? COLORS.error : COLORS.primary, marginTop: 16 }
+                        ]}
+                        onPressIn={startRecording}
+                        onPressOut={stopRecording}
+                        disabled={loading || voiceLoading}>
+                        <MessageSquare size={18} color={isRecording ? COLORS.error : COLORS.primary} />
+                        <Text style={[styles.btnOutlineText, { color: isRecording ? COLORS.error : COLORS.primary }]}>
+                          {voiceLoading ? "Processing AI..." : (isRecording ? "Listening..." : "Hold to Speak (Kannada)")}
+                        </Text>
+                    </TouchableOpacity>
                   )}
               </View>
             )}

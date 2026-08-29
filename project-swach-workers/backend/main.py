@@ -18,6 +18,13 @@ from utils.geocoding import reverse_geocode
 from utils.ai_vision import check_waste_report
 from utils.cloudinary_utils import upload_image
 
+# AI Modules
+from ai.rag_engine import seed_rag_knowledge_base
+from ai.dispatcher_graph import run_ai_dispatcher
+from ai.chat_assistant import analyze_chat_message
+from ai.semantic_reporter import run_semantic_query
+from ai.voice_agent import process_voice_command
+
 # Socket.io setup with path configuration
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 
@@ -25,6 +32,13 @@ sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 async def lifespan(app: FastAPI):
     # Initialize Database
     await init_db()
+    
+    # Seed RAG Knowledge Base
+    try:
+        seed_rag_knowledge_base()
+    except Exception as e:
+        print(f"DEBUG: Failed to seed RAG knowledge base: {e}")
+        
     yield
 
 app = FastAPI(title="Project Swach - API", lifespan=lifespan)
@@ -47,7 +61,8 @@ async def report_waste(
     lat: float = Form(...),
     lon: float = Form(...),
     photo: UploadFile = File(...),
-    user_hash: Optional[str] = Form(None)
+    user_hash: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     # 1. Use client-provided hash or generate new one
     reporter_hash = user_hash or hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()
@@ -83,7 +98,8 @@ async def report_waste(
         reporter_hash=reporter_hash,
         ward=geo_details["ward"],
         constituency=geo_details["constituency"],
-        mla=geo_details["mla"]
+        mla=geo_details["mla"],
+        category=ai_result.get("category", "General")
     )
     await new_complaint.insert()
 
@@ -93,6 +109,16 @@ async def report_waste(
         "ward": new_complaint.ward,
         "location": [lon, lat]
     })
+
+    # 8. Run stateful automated dispatcher in background
+    background_tasks.add_task(
+        trigger_stateful_dispatch,
+        str(new_complaint.id),
+        lat,
+        lon,
+        new_complaint.category,
+        geo_details["ward"]
+    )
 
     return {
         "status": "SUCCESS",
@@ -376,7 +402,76 @@ async def worker_complete(
     
     return {"status": "SUCCESS", "distance_m": dist}
 
+# --- Voice Command Endpoint ---
+@app.post("/worker/voice-command")
+async def worker_voice_command(
+    complaint_id: str = Form(...),
+    audio: UploadFile = File(...)
+):
+    complaint = await Complaint.get(complaint_id)
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+        
+    file_ext = audio.filename.split(".")[-1]
+    filename = f"voice_{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join("uploads", filename)
+    with open(file_path, "wb") as f:
+        f.write(await audio.read())
+        
+    try:
+        reply = await process_voice_command(file_path, complaint.category)
+        os.remove(file_path)
+        return {"status": "SUCCESS", "reply": reply}
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Voice processing failed: {str(e)}")
+
 # --- Chat Endpoints & Sockets ---
+
+# --- AI Helper Functions ---
+async def trigger_stateful_dispatch(complaint_id: str, lat: float, lon: float, category: str, ward: str):
+    try:
+        dispatch_result = await run_ai_dispatcher(complaint_id, lat, lon, category, ward)
+        if dispatch_result["status"] == "SUCCESS":
+            worker = dispatch_result["selected_worker"]
+            # Broadcast the updated status to all sockets
+            await sio.emit("status_update", {
+                "complaint_id": complaint_id,
+                "status": "Assigned",
+                "worker_name": worker["name"],
+                "worker_id": worker["worker_id"],
+                "ai_dispatched": True
+            })
+            print(f"[AI DISPATCH] Dispatched complaint {complaint_id} to worker {worker['name']}.")
+    except Exception as e:
+        print(f"[AI DISPATCH ERROR] Failed to dispatch complaint: {e}")
+
+async def trigger_chat_copilot_response(complaint_id: str, sender_name: str, sender_role: str, message: str):
+    try:
+        reply = await analyze_chat_message(complaint_id, sender_name, sender_role, message)
+        if reply:
+            copilot_msg = ChatMessage(
+                complaint_id=complaint_id,
+                sender_id="assistant",
+                sender_name="Swachh Co-Pilot",
+                sender_role="Admin",
+                message=reply
+            )
+            await copilot_msg.insert()
+            
+            payload = {
+                "complaint_id": complaint_id,
+                "sender_id": copilot_msg.sender_id,
+                "sender_name": copilot_msg.sender_name,
+                "sender_role": copilot_msg.sender_role,
+                "message": copilot_msg.message,
+                "timestamp": copilot_msg.timestamp.isoformat()
+            }
+            await sio.emit("new_chat_message", payload, room=f"chat_{complaint_id}")
+            print(f"[CO-PILOT] Posted co-pilot message for complaint {complaint_id}.")
+    except Exception as e:
+        print(f"[CO-PILOT ERROR] Failed running chat assistant: {e}")
 
 @app.get("/chat/{complaint_id}", response_model=List[ChatMessage])
 async def get_chat_history(complaint_id: str):
@@ -388,7 +483,11 @@ async def clear_chat_history(complaint_id: str):
     return {"status": "SUCCESS"}
 
 @app.post("/chat/{complaint_id}")
-async def post_chat_message(complaint_id: str, msg: ChatMessage):
+async def post_chat_message(
+    complaint_id: str, 
+    msg: ChatMessage, 
+    background_tasks: BackgroundTasks
+):
     print(f"DEBUG: Received chat message for {complaint_id} from {msg.sender_name}")
     msg.complaint_id = complaint_id
     try:
@@ -409,6 +508,17 @@ async def post_chat_message(complaint_id: str, msg: ChatMessage):
     }
     await sio.emit("new_chat_message", payload, room=f"chat_{complaint_id}")
     print(f"DEBUG: Broadcasted message to room chat_{complaint_id}")
+
+    # Trigger Chat Co-pilot if not sent by agent itself
+    if msg.sender_id != "assistant":
+        background_tasks.add_task(
+            trigger_chat_copilot_response,
+            complaint_id,
+            msg.sender_name,
+            msg.sender_role,
+            msg.message
+        )
+
     return {"status": "SUCCESS"}
 
 @sio.on("join_chat")
@@ -424,6 +534,15 @@ async def handle_leave_chat(sid, data):
     if complaint_id:
         await sio.leave_room(sid, f"chat_{complaint_id}")
         print(f"Client {sid} left chat room: chat_{complaint_id}")
+
+# --- Semantic Query API ---
+@app.post("/api/ai/query")
+async def semantic_bi_query(payload: dict):
+    query = payload.get("query")
+    if not query:
+        raise HTTPException(status_code=400, detail="Query prompt is required.")
+    res = await run_semantic_query(query)
+    return res
 
 if __name__ == "__main__":
     import uvicorn

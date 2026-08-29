@@ -72,3 +72,19 @@ class Complaint(Document):
             }
         }
     }
+
+class TokenWallet(Document):
+    user_hash: str
+    balance: int = 0
+
+    class Settings:
+        name = "token_wallets"
+
+class Voucher(Document):
+    title: str
+    description: str
+    cost: int
+    is_active: bool = True
+
+    class Settings:
+        name = "vouchers"
