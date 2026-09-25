@@ -26,13 +26,14 @@ settings = Settings()
 
 async def init_db():
     # Construct URI robustly. 
-    # For Atlas (mongodb+srv), the database name should be after the slash.
     base_uri = settings.mongodb_uri.split("?")[0].rstrip("/")
     if not base_uri.endswith(settings.database_name):
         uri = f"{base_uri}/{settings.database_name}"
         # Re-append parameters if they existed
         if "?" in settings.mongodb_uri:
             uri += "?" + settings.mongodb_uri.split("?")[1]
+    else:
+        uri = settings.mongodb_uri
     print(f"DEBUG: Initializing database connection to: {uri.split('@')[-1] if '@' in uri else uri}")
     await init_beanie(
         connection_string=uri,

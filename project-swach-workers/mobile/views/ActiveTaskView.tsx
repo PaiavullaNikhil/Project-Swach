@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Alert, Dim
 import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2, MessageSquare } from 'lucide-react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import axios from 'axios';
 import { COLORS, API_URL } from '../constants/theme';
@@ -25,7 +25,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
   const [routeDistance, setRouteDistance] = useState<number | null>(null); // in meters
   const [routeDuration, setRouteDuration] = useState<number | null>(null); // in seconds
   const [isChatVisible, setIsChatVisible] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const lastRouteFetchRef = React.useRef<{lat: number; lon: number} | null>(null);
@@ -209,16 +209,14 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
   const startRecording = async () => {
     try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (perm.status === 'granted') {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
+      const perm = await requestRecordingPermissionsAsync();
+      if (perm.granted) {
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
         });
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        setRecording(recording);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
         setIsRecording(true);
       }
     } catch (err) {
@@ -228,20 +226,18 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
   const stopRecording = async () => {
     setIsRecording(false);
-    if (!recording) return;
     setVoiceLoading(true);
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
       if (uri) {
         const formData = new FormData();
         formData.append('complaint_id', task._id);
         
         // Infer type from URI
-        const fileType = uri.split('.').pop();
+        const fileType = uri.split('.').pop() || 'm4a';
         const mimeType = fileType === 'm4a' ? 'audio/m4a' : 'audio/mp4';
 
         formData.append('audio', {
