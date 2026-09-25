@@ -1,18 +1,8 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { useEffect, useState, useMemo } from "react";
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { io } from "socket.io-client";
-
-// Fix for default marker icons in Leaflet with Next.js
-// Marker icons setup
-const trashIcon = L.icon({
-  iconUrl: "/trash.png",
-  iconSize: [64, 64],
-  iconAnchor: [32, 32],
-});
 
 import { AssignmentModal } from "./AssignmentModal";
 
@@ -53,6 +43,9 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [, setSocket] = useState<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
 
   // Stats aggregation by ward (uses ALL pins so ward heat stays accurate)
   const wardStats = useMemo(() => {
@@ -145,6 +138,23 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
     };
   };
 
+  const googleWardStyle = (feature: google.maps.Data.Feature) => {
+    const wardName = `${feature.getProperty("name_en")} (Ward ${feature.getProperty("id")})`;
+    const active = wardStats[wardName]?.active || 0;
+    const isMatchingWard = !wardFilter || wardName === wardFilter;
+    const matchesSearch = !searchQuery.trim() || wardName.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    const matchesHealth = !wardHealthFilter || getHealthLevel(active) === wardHealthFilter;
+    const isVisible = isMatchingWard && matchesSearch && matchesHealth;
+
+    return {
+      fillColor: getColor(active),
+      fillOpacity: isVisible ? 0.45 : 0.08,
+      strokeColor: "#111827",
+      strokeOpacity: isVisible ? 0.8 : 0.2,
+      strokeWeight: isVisible ? 1.5 : 0.5,
+    };
+  };
+
   const fetchPins = () => {
     fetch("/api/complaints")
       .then(res => res.json())
@@ -196,6 +206,61 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
     };
   }, []);
 
+  useEffect(() => {
+    if (!mounted || !mapContainerRef.current || mapRef.current) return;
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      console.error("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
+      return;
+    }
+
+    setOptions({ key: apiKey, v: "weekly" });
+    importLibrary("maps").then(() => {
+      if (!mapContainerRef.current || mapRef.current) return;
+      mapRef.current = new google.maps.Map(mapContainerRef.current, {
+        center: { lat: 12.9345, lng: 77.6265 },
+        zoom: 13,
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+    }).catch((error: unknown) => console.error("Google Maps failed to load:", error));
+  }, [mounted]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !wardGeoData) return;
+
+    map.data.forEach((feature: google.maps.Data.Feature) => map.data.remove(feature));
+    if (layers.wards) map.data.addGeoJson(wardGeoData);
+    map.data.setStyle(googleWardStyle);
+  }, [wardGeoData, layers.wards, wardFilter, searchQuery, wardHealthFilter, wardStats]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = [];
+    if (!layers.complaints) return;
+
+    filteredPins.forEach(pin => {
+      const marker = new google.maps.Marker({
+        map,
+        position: { lat: pin.lat, lng: pin.lng },
+        title: `${pin.ward} - ${pin.status}`,
+      });
+      const infoWindow = new google.maps.InfoWindow({
+        content: `<strong>${pin.ward}</strong><br />Status: ${pin.status}<br /><small>ID: ${pin.id}</small>`,
+      });
+      marker.addListener("click", () => infoWindow.open({ map, anchor: marker }));
+      markersRef.current.push(marker);
+    });
+
+    return () => markersRef.current.forEach(marker => marker.setMap(null));
+  }, [filteredPins, layers.complaints]);
+
   if (!mounted) return null;
 
   // GeoJSON key that changes when filters change to force re-render of ward styles
@@ -203,85 +268,7 @@ export default function LiveMap({ searchQuery, wardFilter, layers, wardHealthFil
 
   return (
     <div className="w-full h-full">
-      <MapContainer 
-        center={[12.9345, 77.6265]} 
-        zoom={13} 
-        style={{ height: "100%", width: "100%" }}
-        scrollWheelZoom={true}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {/* Ward boundaries layer */}
-        {layers.wards && wardGeoData && (
-          <GeoJSON 
-            key={geoJsonKey}
-            data={wardGeoData} 
-            style={wardStyle}
-            onEachFeature={(feature, layer) => {
-              const wardName = `${feature.properties.name_en} (Ward ${feature.properties.id})`;
-              const stats = wardStats[wardName] || { active: 0, total: 0, complaints: [] };
-              
-              layer.bindPopup(`
-                <div class="p-3 bg-zinc-900 text-white rounded-lg min-w-[200px]">
-                  <h4 class="font-bold text-base mb-1 border-b border-white/10 pb-1">${wardName}</h4>
-                  <div class="space-y-2 mt-2">
-                    <div class="flex justify-between text-xs">
-                      <span>Active Complaints:</span>
-                      <span class="font-bold text-red-400">${stats.active}</span>
-                    </div>
-                    <div class="flex justify-between text-xs">
-                      <span>Total Issues:</span>
-                      <span class="font-bold text-blue-400">${stats.total}</span>
-                    </div>
-                  </div>
-                  <div class="mt-4 pt-2 border-t border-white/10 text-[10px] text-muted-foreground italic">
-                    Click "Priority Feed" in dashboard to manage individual assignments.
-                  </div>
-                </div>
-              `, { className: 'dark-popup' });
-
-              layer.on({
-                mouseover: (e) => {
-                  const l = e.target;
-                  l.setStyle({ fillOpacity: 0.8, weight: 2 });
-                },
-                mouseout: (e) => {
-                  const l = e.target;
-                  // Re-apply proper style on mouseout
-                  const isMatchingWard = !wardFilter || wardName === wardFilter;
-                  const matchesSearch = !searchQuery.trim() || wardName.toLowerCase().includes(searchQuery.trim().toLowerCase());
-                  const matchesHealth = !wardHealthFilter || getHealthLevel(wardStats[wardName]?.active || 0) === wardHealthFilter;
-                  const isVisible = isMatchingWard && matchesSearch && matchesHealth;
-                  l.setStyle({ 
-                    fillOpacity: isVisible ? 0.6 : 0.08, 
-                    weight: isVisible ? 1.5 : 0.5 
-                  });
-                }
-              });
-            }}
-          />
-        )}
-
-        {/* Complaint pins layer - uses filtered pins */}
-        {layers.complaints && filteredPins.map(pin => (
-          <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={trashIcon}>
-            <Popup>
-              <div className="text-xs space-y-1">
-                <p className="font-bold">{pin.ward}</p>
-                <p>Status: <span className={`font-semibold ${
-                  pin.status === "Reported" ? "text-red-500" : 
-                  pin.status === "Assigned" ? "text-amber-500" : 
-                  "text-green-500"
-                }`}>{pin.status}</span></p>
-                <p className="text-muted-foreground text-[10px]">ID: {pin.id}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+      <div ref={mapContainerRef} className="h-full w-full" aria-label="Google map showing complaints and ward boundaries" />
 
       {/* Map Legend Overlay - Clickable Ward Health Filters */}
       <div className="absolute bottom-6 right-6 glass p-4 rounded-xl z-[1000] border border-white/10 space-y-2">

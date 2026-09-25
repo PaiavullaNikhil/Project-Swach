@@ -20,7 +20,26 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Swach Citizen to access your camera to photograph waste reports."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Swach Citizen to use your location to tag waste reports."
+        }
+      ],
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "AIzaSyDiiEjtwtCfpgKbLCzVvYy21OxydtteYPw",
+          "iosGoogleMapsApiKey": "AIzaSyDiiEjtwtCfpgKbLCzVvYy21OxydtteYPw"
+        }
+      ]
     ]
   }
 }

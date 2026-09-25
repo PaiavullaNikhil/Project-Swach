@@ -28,6 +28,6 @@ export const GRADIENTS = {
 };
 
 // Citizen Backend (REST API)
-export const API_URL = `http://${localIp}:8000`; 
+export const API_URL = `http://10.211.24.134:8000`; 
 // Worker Backend (Socket.IO for real-time tracking)
-export const SOCKET_URL = `http://${localIp}:8001`; 
+export const SOCKET_URL = `http://10.211.24.134:8001`; 

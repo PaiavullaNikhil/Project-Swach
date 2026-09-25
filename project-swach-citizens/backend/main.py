@@ -16,6 +16,8 @@ from utils.geocoding import reverse_geocode
 from utils.ai_vision import check_waste_report
 from utils.cloudinary_utils import upload_image
 
+GEMINI_CHAT_MODEL = "gemini-3.8-flash"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize Database
@@ -292,7 +294,7 @@ async def citizen_ai_query(payload: dict):
         """
         
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_CHAT_MODEL,
             contents=prompt
         )
         return {"answer": response.text.strip()}
