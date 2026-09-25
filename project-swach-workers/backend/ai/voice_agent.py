@@ -39,7 +39,7 @@ async def process_voice_command(audio_path: str, category: str) -> str:
         """
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-3.5-flash",
             contents=[
                 prompt, 
                 types.Part.from_bytes(data=audio_data, mime_type="audio/mp4") # Expo usually records in m4a/mp4

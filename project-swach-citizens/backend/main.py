@@ -16,7 +16,7 @@ from utils.geocoding import reverse_geocode
 from utils.ai_vision import check_waste_report
 from utils.cloudinary_utils import upload_image
 
-GEMINI_CHAT_MODEL = "gemini-3.8-flash"
+GEMINI_CHAT_MODEL = "gemini-3.1-flash-lite"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

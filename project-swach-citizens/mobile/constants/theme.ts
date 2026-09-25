@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 
 // Dynamically fetch the local IP of the machine running the Expo server
 const debuggerHost = Constants.expoConfig?.hostUri;
-const localIp = debuggerHost ? debuggerHost.split(':')[0] : '192.168.29.51'; // Fallback to last known IP
+const localIp = debuggerHost ? debuggerHost.split(':')[0] : '192.168.68.60'; // Fallback to current local IP
 
 export const COLORS = {
   primary: '#059669', // Emerald 600
@@ -28,6 +28,6 @@ export const GRADIENTS = {
 };
 
 // Citizen Backend (REST API)
-export const API_URL = `http://10.211.24.134:8000`; 
+export const API_URL = `http://${localIp}:8000`; 
 // Worker Backend (Socket.IO for real-time tracking)
-export const SOCKET_URL = `http://10.211.24.134:8001`; 
+export const SOCKET_URL = `http://${localIp}:8001`; 
