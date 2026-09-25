@@ -40,7 +40,7 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
         """
 
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-3.5-flash-lite",
             contents=[
                 prompt, 
                 types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
@@ -73,7 +73,7 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
         
         # If we hit the free-tier rate limit, returning True causes confusion. 
         # Better to return False with a clear message so the user knows they are being throttled.
-        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "503" in error_msg or "UNAVAILABLE" in error_msg:
             return {
                 "valid": False, 
                 "confidence": 0.0, 
@@ -84,5 +84,5 @@ async def check_waste_report(image_path: str) -> Dict[str, Any]:
         return {
             "valid": False, 
             "confidence": 0.0, 
-            "reason": f"AI check unavailable. Ensure photo is clear."
+            "reason": f"AI Error: {error_msg}"
         }

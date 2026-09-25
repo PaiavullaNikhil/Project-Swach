@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, Alert, Animated, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, Alert, Animated, ScrollView, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -157,7 +157,7 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
     <View style={styles.container}>
       {!photo ? (
         <View style={styles.cameraContainer}>
-          <CameraView style={styles.camera} ref={cameraRef} />
+          <CameraView style={styles.camera} ref={cameraRef} facing="back" />
           <View style={styles.overlay}>
              <View style={styles.topBar}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -287,9 +287,9 @@ export default function ReportView({ onCancel, onSuccess, initialLocation, userH
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
-  camera: { flex: 1 },
-  cameraContainer: { flex: 1, position: 'relative' },
+  container: { flex: 1, backgroundColor: '#000' },
+  camera: { position: 'absolute', top: 0, left: 0, width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+  cameraContainer: { flex: 1 },
   overlay: { 
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.1)', 
