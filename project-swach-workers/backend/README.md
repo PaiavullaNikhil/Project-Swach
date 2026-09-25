@@ -36,7 +36,7 @@ This is the FastAPI backend for the Citizens module of Project Swach. It handles
 
 ## 🚀 Running the Server
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 The server will be available at `http://localhost:8000`.

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import { ChevronLeft, MapPin, Truck, User, Clock, CheckCircle, Smartphone } from 'lucide-react-native';
 import { COLORS, GRADIENTS, API_URL, SOCKET_URL } from '../constants/theme';
 import axios from 'axios';
@@ -216,6 +216,7 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
         {/* Map Card */}
         <View style={styles.mapCard}>
             <MapView
+                mapType="none"
                 ref={mapRef}
                 style={styles.map}
                 showsUserLocation={true}
@@ -226,9 +227,15 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
                    longitudeDelta: 0.02,
                 }}
             >
+                <UrlTile
+                  urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xtq_1_c4f06f5cd72571a577b240ff"
+                  maximumZ={19}
+                  tileSize={256}
+                />
                 <Marker 
                     coordinate={{ latitude: complaint.location.coordinates[1], longitude: complaint.location.coordinates[0] }}
                     anchor={{ x: 0.5, y: 0.5 }}
+                    zIndex={2}
                 >
                     <Image source={require('../assets/trash.png')} style={{ width: 40, height: 40 }} />
                 </Marker>

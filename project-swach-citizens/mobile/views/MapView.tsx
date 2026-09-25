@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Image, TouchableOpacity, Dimensions } from 'react-native';
-import MapView, { Geojson } from 'react-native-maps';
+import MapView, { Geojson, UrlTile } from 'react-native-maps';
 import { COLORS } from '../constants/theme';
 import { getMLAName } from '../constants/mlas';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,7 @@ import { X, MapPin } from 'lucide-react-native';
 
 // Import ward borders
 import wardData from '../assets/wards.json';
+import constituenciesData from '../assets/constituencies.json';
 
 const { width } = Dimensions.get('window');
 
@@ -81,10 +82,28 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
       );
     });
   }, [geoData, wardHealth]);
+  const memoizedConstituencies = React.useMemo(() => {
+    const cData = (constituenciesData as any).features ? (constituenciesData as any) : ((constituenciesData as any).default || {});
+    if (!cData.features) return null;
+    return cData.features.map((feature: any, index: number) => (
+      <Geojson
+        key={`constituency-${feature.properties.name}-${index}`}
+        geojson={{
+          type: "FeatureCollection",
+          features: [feature]
+        }}
+        strokeColor={'#00000080'} // dark semi-transparent border for constituencies
+        fillColor={'transparent'} // don't fill, just border
+        strokeWidth={3}
+        tappable={false}
+      />
+    ));
+  }, []);
 
   return (
     <View style={styles.container}>
       <MapView
+        mapType="none"
         style={styles.map}
         showsUserLocation={true}
         initialRegion={{
@@ -94,7 +113,13 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
           longitudeDelta: 0.15,
         }}
       >
+        <UrlTile
+          urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xtq_1_c4f06f5cd72571a577b240ff"
+          maximumZ={19}
+          tileSize={256}
+        />
         {memoizedWards}
+        {memoizedConstituencies}
       </MapView>
 
       <View style={styles.legend}>

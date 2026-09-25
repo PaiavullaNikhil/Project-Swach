@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
 import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2, MessageSquare } from 'lucide-react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import * as Speech from 'expo-speech';
@@ -280,8 +280,9 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
         // --- FULL SCREEN NAVIGATION UI ---
         <>
           <MapView 
+            mapType="none"
             ref={mapRef}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             initialRegion={{
               latitude: (userLocation.coords.latitude + task.location?.coordinates[1]) / 2,
               longitude: (userLocation.coords.longitude + task.location?.coordinates[0]) / 2,
@@ -289,6 +290,11 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               longitudeDelta: Math.max(Math.abs(userLocation.coords.longitude - task.location?.coordinates[0]) * 1.5, 0.01),
             }}
           >
+            <UrlTile
+              urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xtq_1_c4f06f5cd72571a577b240ff"
+              maximumZ={19}
+              tileSize={256}
+            />
             <Marker 
               coordinate={{ latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude }} 
               title="You"
@@ -296,6 +302,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               image={require('../assets/truck.png')}
               rotation={userLocation.coords.heading || 0}
               flat={true}
+              zIndex={2}
             />
             
             <Marker 
@@ -303,6 +310,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               title="Cleanup Site"
               anchor={{ x: 0.5, y: 0.5 }}
               image={require('../assets/trash.png')}
+              zIndex={2}
             />
             
             {routeCoords.length > 1 && (
@@ -310,6 +318,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
                 coordinates={routeCoords}
                 strokeColor={COLORS.primary}
                 strokeWidth={5}
+                zIndex={2}
               />
             )}
           </MapView>

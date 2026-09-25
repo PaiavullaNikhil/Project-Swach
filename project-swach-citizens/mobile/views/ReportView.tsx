@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   camera: { flex: 1 },
   cameraContainer: { flex: 1, position: 'relative' },
   overlay: { 
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.1)', 
     justifyContent: 'space-between', 
     padding: 30 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, View, Text, Modal, TextInput, TouchableOpacity, 
-  FlatList, KeyboardAvoidingView, Platform, SafeAreaView 
+  FlatList, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, X, MessageSquare, User, ShieldCheck } from 'lucide-react-native';
 import { io, Socket } from 'socket.io-client';
 import { COLORS, API_URL } from '../constants/theme';
