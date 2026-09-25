@@ -219,6 +219,7 @@ export default function TrackingView({ complaint: initialComplaint, onBack }: Tr
                 mapType="none"
                 ref={mapRef}
                 style={styles.map}
+                provider={PROVIDER_GOOGLE}
                 showsUserLocation={true}
                 initialRegion={{
                    latitude: complaint.location.coordinates[1],

@@ -3,14 +3,13 @@ import { StyleSheet, View, Text, ActivityIndicator, Image, TouchableOpacity, Dim
 import MapView, { Geojson, UrlTile } from 'react-native-maps';
 import { COLORS } from '../constants/theme';
 import { getMLAName } from '../constants/mlas';
-import { LinearGradient } from 'expo-linear-gradient';
-import { X, MapPin } from 'lucide-react-native';
+import { COLORS } from '../constants/theme';
 
 // Import ward borders
 import wardData from '../assets/wards.json';
 import constituenciesData from '../assets/constituencies.json';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 interface MapViewProps {
   complaints: any[];
@@ -21,6 +20,7 @@ interface MapViewProps {
 export default function MapScreen({ complaints, loading }: MapViewProps) {
   const [wardHealth, setWardHealth] = useState<Record<string, number>>({});
   const [selectedWard, setSelectedWard] = useState<any>(null);
+  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
     if (!complaints) return;
@@ -35,14 +35,6 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
     setWardHealth(counts);
   }, [complaints]);
 
-  const getWardColor = (wardName: string) => {
-    const activeCount = wardHealth[wardName] || 0;
-    if (activeCount >= 6) return 'rgba(239, 68, 68, 0.6)'; // High Load (6+) - Red
-    if (activeCount >= 3) return 'rgba(249, 115, 22, 0.5)'; // Warning (3-5) - Orange
-    if (activeCount >= 1) return 'rgba(234, 179, 8, 0.4)'; // Low Load (1-2) - Yellow
-    return 'rgba(16, 185, 129, 0.2)'; // Healthy (0) - Green
-  };
-
   const geoData = (wardData as any).features ? (wardData as any) : ((wardData as any).default || {});
 
   if (!geoData || !geoData.features) {
@@ -53,33 +45,25 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
     );
   }
 
-  const memoizedWards = React.useMemo(() => {
-    return geoData.features.map((feature: any, index: number) => {
+  // Build the Leaflet HTML
+  const getMapHTML = () => {
+    const wardHealthJSON = JSON.stringify(wardHealth);
+    const geoDataJSON = JSON.stringify(geoData);
+
+    // Build MLA lookup from features
+    const mlaLookup: Record<string, any> = {};
+    geoData.features.forEach((feature: any) => {
       const wardName = feature.properties?.name_en;
       const constituency = feature.properties?.assembly_constituency_name_en;
       const cleanConst = constituency ? constituency.replace(/^\d+-/, '').trim() : 'Unknown';
       const mlaName = getMLAName(constituency);
-      
-      return (
-        <Geojson
-          key={`ward-${wardName}-${index}`}
-          geojson={{
-            type: "FeatureCollection",
-            features: [feature]
-          }}
-          strokeColor={COLORS.primary + '20'}
-          fillColor={getWardColor(wardName)}
-          strokeWidth={1}
-          tappable={true}
-          onPress={() => setSelectedWard({
-            name: wardName,
-            id: feature.properties?.id,
-            constituency: cleanConst,
-            mlaName: mlaName,
-            count: wardHealth[wardName] || 0
-          })}
-        />
-      );
+      mlaLookup[wardName] = {
+        name: wardName,
+        id: feature.properties?.id,
+        constituency: cleanConst,
+        mlaName: mlaName,
+        count: wardHealth[wardName] || 0
+      };
     });
   }, [geoData, wardHealth]);
   const memoizedConstituencies = React.useMemo(() => {
@@ -147,9 +131,9 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
           <View style={styles.mlaCard}>
             <View style={styles.mlaHeader}>
               <View style={styles.avatarWrapper}>
-                <Image 
-                  source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedWard.mlaName)}&background=059669&color=fff&rounded=true&size=128&bold=true` }} 
-                  style={styles.mlaImage} 
+                <Image
+                  source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedWard.mlaName)}&background=059669&color=fff&rounded=true&size=128&bold=true` }}
+                  style={styles.mlaImage}
                 />
                 <View style={styles.activeIndicator} />
               </View>
@@ -189,8 +173,8 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  map: { width: '100%', height: '100%' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  map: { flex: 1 },
   loader: { position: 'absolute', top: '50%', left: '50%', marginLeft: -20 },
   legend: {
     position: 'absolute',
