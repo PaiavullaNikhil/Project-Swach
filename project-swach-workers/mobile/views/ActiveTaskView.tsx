@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
 import { MapPin, Navigation, CheckCircle, Clock, Truck, Trash2, MessageSquare } from 'lucide-react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import axios from 'axios';
 import { COLORS, API_URL } from '../constants/theme';
@@ -25,7 +25,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
   const [routeDistance, setRouteDistance] = useState<number | null>(null); // in meters
   const [routeDuration, setRouteDuration] = useState<number | null>(null); // in seconds
   const [isChatVisible, setIsChatVisible] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const lastRouteFetchRef = React.useRef<{lat: number; lon: number} | null>(null);
@@ -209,16 +209,14 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
   const startRecording = async () => {
     try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (perm.status === 'granted') {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
+      const perm = await requestRecordingPermissionsAsync();
+      if (perm.granted) {
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
         });
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        setRecording(recording);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
         setIsRecording(true);
       }
     } catch (err) {
@@ -228,20 +226,18 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
 
   const stopRecording = async () => {
     setIsRecording(false);
-    if (!recording) return;
     setVoiceLoading(true);
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
       if (uri) {
         const formData = new FormData();
         formData.append('complaint_id', task._id);
         
         // Infer type from URI
-        const fileType = uri.split('.').pop();
+        const fileType = uri.split('.').pop() || 'm4a';
         const mimeType = fileType === 'm4a' ? 'audio/m4a' : 'audio/mp4';
 
         formData.append('audio', {
@@ -284,8 +280,9 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
         // --- FULL SCREEN NAVIGATION UI ---
         <>
           <MapView 
+            mapType="none"
             ref={mapRef}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             initialRegion={{
               latitude: (userLocation.coords.latitude + task.location?.coordinates[1]) / 2,
               longitude: (userLocation.coords.longitude + task.location?.coordinates[0]) / 2,
@@ -293,6 +290,11 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               longitudeDelta: Math.max(Math.abs(userLocation.coords.longitude - task.location?.coordinates[0]) * 1.5, 0.01),
             }}
           >
+            <UrlTile
+              urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xtq_1_c4f06f5cd72571a577b240ff"
+              maximumZ={19}
+              tileSize={256}
+            />
             <Marker 
               coordinate={{ latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude }} 
               title="You"
@@ -300,6 +302,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               image={require('../assets/truck.png')}
               rotation={userLocation.coords.heading || 0}
               flat={true}
+              zIndex={2}
             />
             
             <Marker 
@@ -307,6 +310,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
               title="Cleanup Site"
               anchor={{ x: 0.5, y: 0.5 }}
               image={require('../assets/trash.png')}
+              zIndex={2}
             />
             
             {routeCoords.length > 1 && (
@@ -314,6 +318,7 @@ export default function ActiveTaskView({ task, workerHash, vehicleNumber, onGoBa
                 coordinates={routeCoords}
                 strokeColor={COLORS.primary}
                 strokeWidth={5}
+                zIndex={2}
               />
             )}
           </MapView>

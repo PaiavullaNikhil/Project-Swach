@@ -1,4 +1,12 @@
+import dns from 'node:dns';
 import { MongoClient } from 'mongodb';
+
+// Fix querySrv EBADRESP: Use public DNS resolvers (Google & Cloudflare) for MongoDB Atlas SRV records
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch {
+  // Ignore if custom DNS servers cannot be set in current environment
+}
 
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;

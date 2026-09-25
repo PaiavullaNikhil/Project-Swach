@@ -1,12 +1,13 @@
-import { MapPin, X } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, ActivityIndicator, Image, TouchableOpacity, Dimensions } from 'react-native';
+import MapView, { Geojson, UrlTile } from 'react-native-maps';
+import { COLORS } from '../constants/theme';
 import { getMLAName } from '../constants/mlas';
 import { COLORS } from '../constants/theme';
 
 // Import ward borders
 import wardData from '../assets/wards.json';
+import constituenciesData from '../assets/constituencies.json';
 
 const { width, height } = Dimensions.get('window');
 
@@ -64,96 +65,46 @@ export default function MapScreen({ complaints, loading }: MapViewProps) {
         count: wardHealth[wardName] || 0
       };
     });
-    const mlaLookupJSON = JSON.stringify(mlaLookup);
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    #map { width: 100%; height: 100%; }
-    .leaflet-control-attribution { display: none !important; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    var wardHealth = ${wardHealthJSON};
-    var geoData = ${geoDataJSON};
-    var mlaLookup = ${mlaLookupJSON};
-
-    var map = L.map('map', {
-      zoomControl: false,
-      attributionControl: false
-    }).setView([12.9716, 77.5946], 12);
-
-L.tileLayer(
-  'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xeq_1_7f10cf4f6c133c29c3654058',
-  {
-    maxZoom: 19
-  }
-).addTo(map);
-
-    function getWardColor(wardName) {
-      var count = wardHealth[wardName] || 0;
-      if (count >= 6) return 'rgba(239, 68, 68, 0.6)';
-      if (count >= 3) return 'rgba(249, 115, 22, 0.5)';
-      if (count >= 1) return 'rgba(234, 179, 8, 0.4)';
-      return 'rgba(16, 185, 129, 0.2)';
-    }
-
-    L.geoJSON(geoData, {
-      style: function(feature) {
-        var wardName = feature.properties && feature.properties.name_en;
-        return {
-          fillColor: getWardColor(wardName),
-          fillOpacity: 0.7,
-          color: 'rgba(16, 185, 129, 0.5)',
-          weight: 1
-        };
-      },
-      onEachFeature: function(feature, layer) {
-        layer.on('click', function() {
-          var wardName = feature.properties && feature.properties.name_en;
-          var info = mlaLookup[wardName] || { name: wardName, id: '', constituency: 'Unknown', mlaName: 'Unknown', count: 0 };
-          window.ReactNativeWebView.postMessage(JSON.stringify(info));
-        });
-      }
-    }).addTo(map);
-  </script>
-</body>
-</html>`;
-  };
-
-  const handleMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      setSelectedWard(data);
-    } catch (e) {
-      console.log('Map message parse error', e);
-    }
-  };
+  }, [geoData, wardHealth]);
+  const memoizedConstituencies = React.useMemo(() => {
+    const cData = (constituenciesData as any).features ? (constituenciesData as any) : ((constituenciesData as any).default || {});
+    if (!cData.features) return null;
+    return cData.features.map((feature: any, index: number) => (
+      <Geojson
+        key={`constituency-${feature.properties.name}-${index}`}
+        geojson={{
+          type: "FeatureCollection",
+          features: [feature]
+        }}
+        strokeColor={'#00000080'} // dark semi-transparent border for constituencies
+        fillColor={'transparent'} // don't fill, just border
+        strokeWidth={3}
+        tappable={false}
+      />
+    ));
+  }, []);
 
   return (
     <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        source={{ html: getMapHTML() }}
+      <MapView
+        mapType="none"
         style={styles.map}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        onMessage={handleMessage}
-        scrollEnabled={false}
-        bounces={false}
-        overScrollMode="never"
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-      />
+        showsUserLocation={true}
+        initialRegion={{
+          latitude: 12.9716,
+          longitude: 77.5946,
+          latitudeDelta: 0.15,
+          longitudeDelta: 0.15,
+        }}
+      >
+        <UrlTile
+          urlTemplate="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3xtq_1_c4f06f5cd72571a577b240ff"
+          maximumZ={19}
+          tileSize={256}
+        />
+        {memoizedWards}
+        {memoizedConstituencies}
+      </MapView>
 
       <View style={styles.legend}>
         <Text style={styles.legendTitle}>WARD HEALTH</Text>

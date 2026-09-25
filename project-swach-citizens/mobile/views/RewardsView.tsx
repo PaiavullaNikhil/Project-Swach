@@ -8,7 +8,7 @@ interface Voucher {
   _id: string;
   title: string;
   description: string;
-  cost: int;
+  cost: number;
 }
 
 interface RewardsViewProps {
