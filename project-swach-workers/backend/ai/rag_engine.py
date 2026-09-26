@@ -16,14 +16,18 @@ class InMemoryVectorStore:
         if not texts:
             return
         try:
-            vectors = embeddings.embed_documents(texts)
-            for i, text in enumerate(texts):
-                meta = metadatas[i] if metadatas else {}
-                self.documents.append({
-                    "text": text,
-                    "vector": vectors[i],
-                    "metadata": meta
-                })
+            batch_size = 8
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                batch_meta = metadatas[i:i + batch_size] if metadatas else None
+                vectors = embeddings.embed_documents(batch_texts)
+                for j, text in enumerate(batch_texts):
+                    meta = batch_meta[j] if batch_meta else {}
+                    self.documents.append({
+                        "text": text,
+                        "vector": vectors[j],
+                        "metadata": meta
+                    })
         except Exception as e:
             print(f"[RAG ENGINE ERROR] Failed to embed texts: {e}")
 

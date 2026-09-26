@@ -2,7 +2,7 @@ import math
 from typing import TypedDict, List, Optional, Annotated
 from langgraph.graph import StateGraph, START, END
 
-from ai.config import llm
+from ai.config import llm, get_content_text
 from ai.rag_engine import retrieve_sop_for_complaint
 from ai.database_tools import (
     get_available_workers_in_ward,
@@ -61,7 +61,7 @@ async def assess_priority_node(state: DispatchState) -> dict:
     """
     try:
         res = await llm.ainvoke(prompt)
-        text = res.content.upper()
+        text = get_content_text(res).upper()
         priority = "MEDIUM"
         for val in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
             if val in text:
@@ -185,7 +185,7 @@ async def rank_and_recommend_node(state: DispatchState) -> dict:
     """
     try:
         res = await llm.ainvoke(prompt)
-        text = res.content
+        text = get_content_text(res)
         
         # Extract fields robustly
         chosen_worker_id = None

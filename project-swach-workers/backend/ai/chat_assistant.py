@@ -1,6 +1,6 @@
 import json
 from typing import Optional
-from ai.config import llm
+from ai.config import llm, get_content_text
 from ai.rag_engine import retrieve_sop_for_complaint
 from ai.database_tools import get_available_vehicles_in_ward
 from models import Complaint, Worker, Vehicle
@@ -95,14 +95,13 @@ async def analyze_chat_message(
     """
     try:
         res = await llm.ainvoke(prompt)
-        raw_output = res.content.strip()
+        raw_output = get_content_text(res).strip()
         
         # Guard for no action
         if "NO_ACTION" in raw_output.upper():
             return None
             
         # Parse JSON
-        # Robust parsing in case of markdown wrapping
         if "```json" in raw_output:
             raw_output = raw_output.split("```json")[1].split("```")[0].strip()
         elif "```" in raw_output:
@@ -134,7 +133,7 @@ async def analyze_chat_message(
         Draft the response. Do NOT include json formatting. Write only the plain markdown message to send to the chat room.
         """
         final_res = await llm.ainvoke(response_prompt)
-        return final_res.content.strip()
+        return get_content_text(final_res).strip()
         
     except Exception as e:
         print(f"[CO-PILOT ERROR] Failed to parse or execute chat co-pilot analysis: {e}")

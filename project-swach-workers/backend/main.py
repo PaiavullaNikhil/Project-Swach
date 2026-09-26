@@ -538,11 +538,13 @@ async def handle_leave_chat(sid, data):
 # --- Semantic Query API ---
 @app.post("/api/ai/query")
 async def semantic_bi_query(payload: dict):
+    from fastapi.responses import JSONResponse
+    import json
     query = payload.get("query")
     if not query:
         raise HTTPException(status_code=400, detail="Query prompt is required.")
     res = await run_semantic_query(query)
-    return res
+    return JSONResponse(content=json.loads(json.dumps(res, default=str)))
 
 if __name__ == "__main__":
     import uvicorn
